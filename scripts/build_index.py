@@ -4,7 +4,6 @@ import os, json, re
 import requests
 from io import BytesIO
 from pdfminer.high_level import extract_text
-from pdfminer.pdfparser import PDFSyntaxError
 
 SESSION = requests.Session()
 SESSION.headers.update({"User-Agent": "PACM-indexer/1.0 (+github action)"})
