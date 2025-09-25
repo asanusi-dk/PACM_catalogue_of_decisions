@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Article 6.4 Catalogue — with Full‑text Search (Beta)</title>
+  <title>Article 6.4 Catalogue</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
   <header>
     <h1>Article 6.4 Catalogue</h1>
-    <p class="tagline">Search Supervisory Body regulatory documents & related notes</p>
+    <p class="tagline">Current A6.4 regulatory documents + CMA related decisions (searchable)</p>
     <div class="controls">
-      <input id="q" type="search" placeholder="Search metadata (title, symbol, notes)…">
+      <input id="q" type="search" placeholder='Search… tip: use quotes for exact phrases, e.g. "reversal buffer"'>
       <select id="type">
         <option value="">All types</option>
         <option>Standard</option>
@@ -20,6 +20,7 @@
         <option>Information note</option>
         <option>Concept note</option>
         <option>Draft</option>
+        <option>CMA decision</option>
       </select>
       <select id="category">
         <option value="">All categories</option>
@@ -28,6 +29,7 @@
         <option>Activity Cycle</option>
         <option>Transition</option>
         <option>Governance</option>
+        <option>CMA</option>
       </select>
       <select id="sort">
         <option value="date_desc">Newest first</option>
