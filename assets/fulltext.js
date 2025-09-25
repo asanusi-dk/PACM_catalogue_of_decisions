@@ -11,7 +11,6 @@
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
   function parseQuery(q){
-    // phrases in quotes + leftover single terms
     const phrases = [];
     const rx = /"([^"]+)"/g;
     let m;
@@ -42,6 +41,7 @@
     const end = Math.min(text.length, pos + radius);
     const slice = text.slice(start, end);
     const safe = htmlEscape(slice);
+    if(!queryParts.length) return (start>0?'… ':'') + safe + (end<text.length?' …':'');
     const re = new RegExp(queryParts.map(escapeRe).join('|'), 'ig');
     return (start>0?'… ':'') + safe.replace(re, m=>`<span class="mark">${m}</span>`) + (end<text.length?' …':'');
   }
@@ -50,11 +50,10 @@
     let m;
     while((m = re.exec(text))){
       yield { index: m.index, len: (m[0]||'').length };
-      if(re.lastIndex === m.index) re.lastIndex++; // guard
+      if(re.lastIndex === m.index) re.lastIndex++;
     }
   }
 
-  // Existing: per-document (multi‑snippet) results
   async function searchMulti(q){
     const idx = await loadIndex();
     q = (q||'').trim();
@@ -67,7 +66,6 @@
 
     const hits = [];
     for(const doc of idx){
-      // Require all phrases and all terms to be present (normalized)
       let ok = true;
       for(const p of normPhrases){ if(!doc.norm.includes(p)) { ok=false; break; } }
       if(ok){
@@ -75,7 +73,6 @@
       }
       if(!ok) continue;
 
-      // Window all matches (prefer phrases if provided)
       const extractParts = (phrases.length ? phrases : terms).filter(Boolean);
       const rex = new RegExp(extractParts.map(escapeRe).join('|'), 'ig');
       const snippets = [];
@@ -98,7 +95,6 @@
     return hits;
   }
 
-  // New: per‑occurrence flat results
   async function searchOccurrences(q){
     const idx = await loadIndex();
     q = (q||'').trim();
@@ -123,15 +119,13 @@
       let count = 0;
       for(const m of findAll(doc.text, rex)){
         const snippet = makeSnippet(doc.text, parts, m.index);
-        const score = (phrases.length ? 100 : 0) + 10; // simple per‑occurrence score
+        const score = (phrases.length ? 100 : 0) + 10;
         occ.push({ url: doc.url, title: doc.title, snippet, score, pos: m.index });
         count++;
-        if(count >= 500) break; // cap per doc
+        if(count >= 500) break;
       }
     }
-    // Sort by (doc title asc, then pos), but lightly prefer phrase matches via score
     occ.sort((a,b)=> (b.score - a.score) || (a.title||'').localeCompare(b.title||'') || (a.pos - b.pos));
-    // Global cap to avoid massive DOM
     return occ.slice(0, 2000);
   }
 
