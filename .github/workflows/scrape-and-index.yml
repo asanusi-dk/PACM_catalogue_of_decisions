@@ -5,16 +5,23 @@ on:
   schedule:
     - cron: "17 2 * * *"
   push:
-    branches: [ main, master ]
+    branches: [ main ]
 
 permissions:
   contents: write
+
+# Avoid two runs trying to push at the same time
+concurrency:
+  group: sync-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history so rebase works
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -27,17 +34,18 @@ jobs:
           pip install requests beautifulsoup4 lxml pdfminer.six
 
       - name: Scrape A6.4 Rules & Regulations (ENG only, ignore Forms)
-        run: |
-          python scripts/scrape_current_versions.py
+        run: python scripts/scrape_current_versions.py
 
       - name: Build full-text index
-        run: |
-          python scripts/build_index.py
+        run: python scripts/build_index.py
 
-      - name: Commit data files
+      - name: Commit & push data files (with rebase)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/a64_catalogue.json search_index.json
           git commit -m "Auto-update catalogue + index" || echo "No changes"
-          git push
+          # Rebase onto the latest remote tip to avoid non-fast-forward errors
+          git fetch origin ${{ github.ref_name }}
+          git pull --rebase origin ${{ github.ref_name }} || true
+          git push origin HEAD:${{ github.ref_name }}
