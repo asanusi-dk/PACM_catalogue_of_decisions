@@ -1,0 +1,19 @@
+
+:root { --bg:#0b0f14; --card:#121820; --ink:#e8f0ff; --muted:#9db0c8; --accent:#7bd; }
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui, Segoe UI, Roboto, sans-serif;}
+header{padding:24px 20px 0;max-width:1100px;margin:0 auto;}
+h1{margin:0 0 4px;font-size:28px;letter-spacing:0.2px;}
+.tagline{margin:0 0 14px;color:var(--muted)}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px}
+.controls input,.controls select{padding:10px 12px;border:1px solid #223042;background:#0e141c;color:var(--ink);border-radius:10px;outline:none;}
+main{max-width:1100px;margin:0 auto;padding:8px 20px 40px;}
+.cards{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.card{background:var(--card);border:1px solid #1c2835;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:6px;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+.card h3{margin:0 0 2px;font-size:18px;}
+.meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:8px;}
+.badge{display:inline-block;font-size:12px;padding:2px 8px;border:1px solid #2a3a4f;border-radius:999px;color:var(--accent);}
+.card a{color:#bfe3ff;text-decoration:none}
+.card a:hover{text-decoration:underline}
+.notes{color:#c8d6e8;font-size:14px;margin-top:4px}
+footer{max-width:1100px;margin:0 auto;padding:10px 20px 30px;color:#98aac2;font-size:13px;border-top:1px solid #122031}

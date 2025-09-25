@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Article 6.4 Catalogue (MVP)</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header>
+    <h1>Article 6.4 Catalogue (MVP)</h1>
+    <p class="tagline">Search and filter Supervisory Body regulatory documents & related notes</p>
+    <div class="controls">
+      <input id="q" type="search" placeholder="Search title, symbol, notes…">
+      <select id="type">
+        <option value="">All types</option>
+        <option>Standard</option>
+        <option>Procedure</option>
+        <option>Tool</option>
+        <option>Information note</option>
+        <option>Concept note</option>
+        <option>Draft</option>
+      </select>
+      <select id="category">
+        <option value="">All categories</option>
+        <option>Methodologies</option>
+        <option>Removals</option>
+        <option>Activity Cycle</option>
+        <option>Transition</option>
+        <option>Governance</option>
+      </select>
+      <select id="sort">
+        <option value="date_desc">Newest first</option>
+        <option value="date_asc">Oldest first</option>
+        <option value="symbol">Symbol (A→Z)</option>
+      </select>
+    </div>
+  </header>
+
+  <main>
+    <ul id="list" class="cards"></ul>
+  </main>
+
+  <footer>
+    <p>Source: UNFCCC A6.4 Supervisory Body – Rules & Regulations. Links point to official PDFs.</p>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

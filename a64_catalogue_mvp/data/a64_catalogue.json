@@ -1,0 +1,102 @@
+[
+  {
+    "title": "Standard: Application of the requirements of Chapter V.B (Methodologies) for the development and assessment of Article 6.4 mechanism methodologies",
+    "symbol": "A6.4-STAN-METH-001",
+    "version": "01.1",
+    "date": "2024-10-09",
+    "type": "Standard",
+    "category": "Methodologies",
+    "url": "https://unfccc.int/sites/default/files/resource/A6.4-STAN-METH-001.pdf",
+    "notes": "Methodology development & assessment requirements."
+  },
+  {
+    "title": "Standard: Requirements for activities involving removals under the Article 6.4 mechanism",
+    "symbol": "A6.4-STAN-METH-002",
+    "version": "01.0",
+    "date": "2024-10-09",
+    "type": "Standard",
+    "category": "Removals",
+    "url": "https://unfccc.int/sites/default/files/resource/A6.4-STAN-METH-002.pdf",
+    "notes": "Removals standard, including reversal risk & buffers."
+  },
+  {
+    "title": "Standard: Setting the baseline in mechanism methodologies",
+    "symbol": "A6.4-STAN-METH-004",
+    "version": "01.0",
+    "date": "2025-05-16",
+    "type": "Standard",
+    "category": "Methodologies",
+    "url": "https://unfccc.int/sites/default/files/resource/A6.4-STAN-METH-004.pdf",
+    "notes": "Crediting baseline setting requirements."
+  },
+  {
+    "title": "Tool: Article 6.4 sustainable development tool",
+    "symbol": "A6.4-TOOL-AC-001",
+    "version": "01.1",
+    "date": "2025-02-11",
+    "type": "Tool",
+    "category": "Activity Cycle",
+    "url": "https://unfccc.int/sites/default/files/resource/A6.4-TOOL-AC-001.pdf",
+    "notes": "SD safeguards, impact reporting, stakeholder processes."
+  },
+  {
+    "title": "Standard: Article 6.4 activity standard for projects",
+    "symbol": "A6.4-STAN-AC-002",
+    "version": "02.0",
+    "date": "2025-05-16",
+    "type": "Standard",
+    "category": "Activity Cycle",
+    "url": "https://unfccc.int/sites/default/files/resource/A6.4-STAN-AC-002.pdf",
+    "notes": "Minimum requirements for A6.4 project registration & cycle."
+  },
+  {
+    "title": "Standard: Transition of CDM activities to the Article 6.4 mechanism",
+    "symbol": "A6.4-STAN-AC-001",
+    "version": "01.0",
+    "date": "2024-04-02",
+    "type": "Standard",
+    "category": "Transition",
+    "url": "https://unfccc.int/sites/default/files/resource/A6.4-STAN-AC-001.pdf",
+    "notes": "Rules for transitioning CDM activities to A6.4."
+  },
+  {
+    "title": "Procedure: Periodic structured legal and editorial review of SB regulatory documents",
+    "symbol": "A6.4-PROC-GOV-008",
+    "version": "01.0",
+    "date": "2025-05-16",
+    "type": "Procedure",
+    "category": "Governance",
+    "url": "https://unfccc.int/sites/default/files/resource/A6.4-PROC-GOV-008.pdf",
+    "notes": "Defines periodic legal/editorial review system."
+  },
+  {
+    "title": "Information note: Decision and documentation framework",
+    "symbol": "A6.4-INFO-GOV-005",
+    "version": "01.0",
+    "date": "2024-06-01",
+    "type": "Information note",
+    "category": "Governance",
+    "url": "https://unfccc.int/sites/default/files/resource/A6.4-INFO-GOV-005.pdf",
+    "notes": "Explains official record: meeting reports + annexes; authoritative set on Rules & Regulations page."
+  },
+  {
+    "title": "MEP concept note: Applicability of removal guidance to emission reduction activities and vice versa",
+    "symbol": "A6.4-MEP007-A03",
+    "version": "02.0",
+    "date": "2025-07-14",
+    "type": "Concept note",
+    "category": "Methodologies",
+    "url": "https://unfccc.int/sites/default/files/resource/A6.4-MEP007-A03.pdf",
+    "notes": "Cross-application of guidance between removals and emission reductions."
+  },
+  {
+    "title": "Draft Standard: Addressing non-permanence and reversals",
+    "symbol": "A6.4-MEP008-A03",
+    "version": "Draft 01.0",
+    "date": "2025-09-11",
+    "type": "Draft",
+    "category": "Removals",
+    "url": "https://unfccc.int/sites/default/files/resource/A6.4-MEP008-A03.pdf",
+    "notes": "Draft addressing reversals per Removals Standard follow-up."
+  }
+]
