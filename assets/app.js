@@ -15,29 +15,17 @@ function haystack(it){ return normalize(`${it.title} ${it.symbol} ${it.notes}`);
 function matchesQuery(it, qTokens){ if(qTokens.length===0) return true; const hay = haystack(it); return qTokens.every(t => hay.includes(t)); }
 function cmp(a,b){ return a<b ? -1 : a>b ? 1 : 0; }
 
-const SECTION_ORDER = [
-  "CMA related decisions and documents",
-  "Regular reports to the Supervisory Body",
-  "Standards",
-  "Procedures",
-  "Tools",
-  "Information notes",
-  "Forms"
-];
-function sectionIndex(name){ const i=SECTION_ORDER.indexOf(name||''); return i===-1?999:i; }
-
 function getView(){ const v=document.querySelector('input[name="view"]:checked'); return v?v.value:'docs'; }
 
 function renderListFlat(items){
   const cont = document.getElementById('list');
   cont.innerHTML = '';
   if(!items.length){
-    cont.innerHTML = '<div style="opacity:.7">No results. Remove filters or try a broader term.</div>';
+    cont.innerHTML = '<div style="opacity:.7">No results. Try removing filters or broaden your search.</div>';
     return;
   }
   // stable sort
-  items.sort((a,b)=> sectionIndex(a.section||a.type)-sectionIndex(b.section||b.type)
-                  || (a.section||'').localeCompare(b.section||'')
+  items.sort((a,b)=> (a.section||'').localeCompare(b.section||'')
                   || (a.subsection||'').localeCompare(b.subsection||'')
                   || (a.symbol||'').localeCompare(b.symbol||'')
                   || (a.title||'').localeCompare(b.title||''));
@@ -51,10 +39,6 @@ function renderListFlat(items){
         <th class="col-symbol">Symbol</th>
         <th>Version</th>
         <th class="col-date">Entry into force / Date</th>
-        <th>Type</th>
-        <th class="col-section">Section</th>
-        <th class="col-subsection">Subsection</th>
-        <th class="pdf">PDF</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -68,10 +52,6 @@ function renderListFlat(items){
       <td class="col-symbol">${it.symbol||''}</td>
       <td>${it.version||''}</td>
       <td class="col-date">${it.date||''}</td>
-      <td>${it.type||''}</td>
-      <td class="col-section">${it.section||it.type||''}</td>
-      <td class="col-subsection">${it.subsection||it.category||''}</td>
-      <td class="pdf"><a href="${it.url}" target="_blank" rel="noopener">Open</a></td>
     `;
     frag.appendChild(tr);
   }
@@ -99,7 +79,6 @@ function renderHits(occ, metaByUrl){
       <div class="hit-title"><a href="${h.url}" target="_blank" rel="noopener">${meta.title || h.title || h.url}</a></div>
       <div class="meta">
         ${meta.symbol ? `<span>${meta.symbol}</span> • ` : ''}
-        ${meta.type ? `<span>${meta.type}</span> • ` : ''}
         ${(meta.subsection||meta.category) ? `<span>${(meta.subsection||meta.category)}</span> • ` : ''}
         ${meta.date ? `<span>${meta.date}</span>` : ''}
       </div>

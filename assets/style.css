@@ -9,7 +9,10 @@
 html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
 .appbar{position:sticky;top:0;z-index:50;backdrop-filter:blur(10px);background:rgba(11,15,20,.85);border-bottom:1px solid var(--border)}
 .appbar-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:14px 20px 8px}
-.brand{display:flex;align-items:center;gap:10px}.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--un-blue);box-shadow:0 0 0 4px rgba(90,185,234,.2)}.brand h1{margin:0;font-size:20px}.brand .tagline{color:var(--muted);margin-left:10px;font-size:13px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--un-blue);box-shadow:0 0 0 4px rgba(90,185,234,.2)}
+.brand-text h1{margin:0;font-size:20px}
+.brand-text .tagline{margin:4px 0 0;color:var(--muted);font-size:13px}
 .controls{max-width:1200px;margin:0 auto;padding:8px 20px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .controls input,.controls .ghost{padding:10px 12px;border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:12px}
 .toggle{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);background:var(--surface);border-radius:999px}
@@ -20,22 +23,19 @@ main{max-width:1200px;margin:0 auto;padding:14px 20px 40px}
 .count{color:var(--muted);margin:4px 0 10px 2px;font-size:13px;min-height:1em}
 .hidden{display:none}
 
-/* Compact list table */
+/* Compact list table (reduced columns) */
 .table-wrap{ overflow:auto; border:1px solid var(--border); border-radius:12px; background:var(--surface); box-shadow: var(--shadow) }
 .table{ width:100%; border-collapse:separate; border-spacing:0 }
 .table th, .table td{ padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:top; }
 .table th{ position:sticky; top:0; background: color-mix(in oklab, var(--surface) 95%, transparent); text-align:left; z-index:1 }
 .table tr:hover td{ background: color-mix(in oklab, var(--surface) 85%, transparent) }
-.table .col-title{ min-width: 360px }
+.table .col-title{ min-width: 460px }
 .table .col-title a{ color: var(--un-blue); text-decoration:none }
 .table .col-title a:hover{ text-decoration:underline }
 .table .col-symbol{ white-space:nowrap }
 .table .col-date{ white-space:nowrap }
-.table .col-section, .table .col-subsection{ white-space:nowrap }
-.table .pdf a{ color:var(--accent-strong); text-decoration:none }
-.table .pdf a:hover{ text-decoration:underline }
 
-/* Hit list (unchanged) */
+/* Hit list */
 .hitlist{ display:flex; flex-direction:column; gap:10px }
 .hit{ background:linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), var(--card)); border:1px solid var(--border); border-radius:12px; padding:10px; box-shadow:var(--shadow) }
 .hit .hit-title{ font-size:14px; margin:0 0 4px }
@@ -43,5 +43,4 @@ main{max-width:1200px;margin:0 auto;padding:14px 20px 40px}
 .hit .meta{ font-size:12px; color:var(--muted); margin-bottom:6px }
 .hit.active{ outline: var(--ring); outline-offset: 2px }
 
-/* Footer */
 footer{ max-width:1200px; margin:0 auto; padding:10px 20px 30px; color:var(--muted); font-size:13px; border-top:1px solid var(--border) }
