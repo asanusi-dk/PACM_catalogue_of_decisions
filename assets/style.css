@@ -2,32 +2,23 @@
 :root{
   --bg:#0b0f14; --surface:#0e141c; --card:#121820; --border:#1c2835;
   --ink:#e8f0ff; --muted:#9db0c8; --accent:#7bd; --accent-strong:#4aa9ff;
+  --un-blue:#5AB9EA;  /* light UN-like blue for document titles */
   --mark-bg:#ffeb99; --mark-fg:#001; --shadow:0 8px 30px rgba(0,0,0,.25);
   --ring:0 0 0 3px rgba(74,169,255,.35);
 }
 html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
 .appbar{position:sticky;top:0;z-index:50;backdrop-filter:blur(10px);background:rgba(11,15,20,.85);border-bottom:1px solid var(--border)}
 .appbar-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:14px 20px 8px}
-.brand{display:flex;align-items:center;gap:10px}.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--accent-strong);box-shadow:0 0 0 4px rgba(74,169,255,.15)}.brand h1{margin:0;font-size:20px}.brand .tagline{color:var(--muted);margin-left:10px;font-size:13px}
+.brand{display:flex;align-items:center;gap:10px}.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--un-blue);box-shadow:0 0 0 4px rgba(90,185,234,.2)}.brand h1{margin:0;font-size:20px}.brand .tagline{color:var(--muted);margin-left:10px;font-size:13px}
 .controls{max-width:1200px;margin:0 auto;padding:8px 20px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.controls input,.controls select,.controls .ghost{padding:10px 12px;border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:12px}
+.controls input,.controls .ghost{padding:10px 12px;border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:12px}
 .toggle{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);background:var(--surface);border-radius:999px}
 .toggle input{width:16px;height:16px}
-.view-toggle .tab,.layout-toggle .tab{border:1px solid var(--border);padding:8px 12px;border-radius:999px;cursor:pointer;background:var(--surface)}
+.view-toggle .tab{border:1px solid var(--border);padding:8px 12px;border-radius:999px;cursor:pointer;background:var(--surface)}
 .status{max-width:1200px;margin:4px auto 6px;padding:0 20px;color:var(--muted);min-height:1em}
 main{max-width:1200px;margin:0 auto;padding:14px 20px 40px}
 .count{color:var(--muted);margin:4px 0 10px 2px;font-size:13px;min-height:1em}
 .hidden{display:none}
-
-/* Cards grid (kept for users who like cards) */
-.cards{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:14px }
-.card{ background:linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, transparent), var(--card)); border:1px solid var(--border); border-radius:16px; padding:14px; display:flex; flex-direction:column; gap:6px; box-shadow:var(--shadow) }
-.card h3{ margin:0 0 2px; font-size:18px }
-.card a{ color:var(--accent-strong); text-decoration:none } .card a:hover{ text-decoration:underline }
-.meta{ font-size:13px; color:var(--muted); display:flex; flex-wrap:wrap; gap:8px }
-.badge{ display:inline-block; font-size:12px; padding:2px 8px; border:1px solid var(--border); border-radius:999px; color:var(--accent) }
-.snip{ font-size:13px; color:#cfe; background:rgba(255,255,255,.04); border:1px solid #203040; border-radius:10px; padding:8px; margin-top:6px }
-.mark{ background:var(--mark-bg); color:var(--mark-fg); padding:0 2px; border-radius:3px }
 
 /* Compact list table */
 .table-wrap{ overflow:auto; border:1px solid var(--border); border-radius:12px; background:var(--surface); box-shadow: var(--shadow) }
@@ -36,12 +27,13 @@ main{max-width:1200px;margin:0 auto;padding:14px 20px 40px}
 .table th{ position:sticky; top:0; background: color-mix(in oklab, var(--surface) 95%, transparent); text-align:left; z-index:1 }
 .table tr:hover td{ background: color-mix(in oklab, var(--surface) 85%, transparent) }
 .table .col-title{ min-width: 360px }
+.table .col-title a{ color: var(--un-blue); text-decoration:none }
+.table .col-title a:hover{ text-decoration:underline }
 .table .col-symbol{ white-space:nowrap }
 .table .col-date{ white-space:nowrap }
 .table .col-section, .table .col-subsection{ white-space:nowrap }
 .table .pdf a{ color:var(--accent-strong); text-decoration:none }
 .table .pdf a:hover{ text-decoration:underline }
-.kbd{ background:#132033; border:1px solid #203040; border-radius:6px; padding:1px 6px; font-size:12px; color:#cfe }
 
 /* Hit list (unchanged) */
 .hitlist{ display:flex; flex-direction:column; gap:10px }

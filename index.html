@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Article 6.4 Catalogue</title>
+  <title>Paris Agreement Crediting Mechanism Catalogue of Docs</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -11,8 +11,8 @@
     <div class="appbar-inner">
       <div class="brand">
         <div class="dot"></div>
-        <h1>Article 6.4 Catalogue</h1>
-        <span class="tagline">Current A6.4 regulatory documents + CMA decisions — full‑text searchable</span>
+        <h1>Paris Agreement Crediting Mechanism Catalogue of Docs</h1>
+        <span class="tagline">Search document and texts related to PACM</span>
       </div>
       <div class="bar-actions">
         <button id="themeToggle" class="ghost" title="Toggle theme" aria-label="Toggle theme">🌗</button>
@@ -21,47 +21,14 @@
 
     <div class="controls">
       <input id="q" type="search" placeholder='Search… tip: use quotes for exact phrases, e.g. "reversal buffer"'>
-      <select id="type" aria-label="Filter by type">
-        <option value="">All types</option>
-        <option>Standard</option>
-        <option>Procedure</option>
-        <option>Tool</option>
-        <option>Information note</option>
-        <option>Concept note</option>
-        <option>Draft</option>
-        <option>CMA decision</option>
-      </select>
-      <select id="category" aria-label="Filter by subsection/category">
-        <option value="">All subsections</option>
-        <option>Accreditation</option>
-        <option>Activity cycle</option>
-        <option>Methodology</option>
-        <option>Removals</option>
-        <option>Governance</option>
-        <option>Registry</option>
-        <option>Transition</option>
-        <option>CMA</option>
-      </select>
-      <select id="sort" aria-label="Sort order">
-        <option value="date_desc">Newest first</option>
-        <option value="date_asc">Oldest first</option>
-        <option value="symbol">Symbol (A→Z)</option>
-      </select>
       <label class="toggle">
         <input id="fulltextToggle" type="checkbox">
         <span>Full‑text</span>
       </label>
-
       <div class="view-toggle" role="tablist" aria-label="Result view">
         <label class="tab"><input type="radio" name="view" value="docs" checked> Documents</label>
         <label class="tab"><input type="radio" name="view" value="hits"> Matches</label>
       </div>
-
-      <div class="layout-toggle" role="tablist" aria-label="Layout">
-        <label class="tab"><input type="radio" name="layout" value="list" checked> List</label>
-        <label class="tab"><input type="radio" name="layout" value="cards"> Cards</label>
-      </div>
-
       <button id="reset" class="ghost">Reset</button>
     </div>
     <div id="status" class="status" role="status" aria-live="polite"></div>
@@ -70,7 +37,7 @@
   <main>
     <div id="count" class="count"></div>
 
-    <!-- Container for Docs view -->
+    <!-- Container for Docs (list only) -->
     <div id="list"></div>
 
     <!-- Flat hits view -->
