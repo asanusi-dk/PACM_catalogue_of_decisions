@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Article 6.4 Catalogue</title>
+  <title>Article 6.4 Catalogue — Flat Hits View</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
   <header>
     <h1>Article 6.4 Catalogue</h1>
-    <p class="tagline">Current A6.4 regulatory documents + CMA related decisions (searchable)</p>
+    <p class="tagline">Current A6.4 regulatory documents + CMA decisions — full‑text searchable</p>
+
     <div class="controls">
       <input id="q" type="search" placeholder='Search… tip: use quotes for exact phrases, e.g. "reversal buffer"'>
       <select id="type">
@@ -29,6 +30,7 @@
         <option>Activity Cycle</option>
         <option>Transition</option>
         <option>Governance</option>
+        <option>Accreditation</option>
         <option>CMA</option>
       </select>
       <select id="sort">
@@ -38,8 +40,12 @@
       </select>
       <label class="toggle">
         <input id="fulltextToggle" type="checkbox">
-        <span>Full‑text (beta)</span>
+        <span>Full‑text</span>
       </label>
+      <div class="view-toggle" role="tablist" aria-label="Result view">
+        <label class="tab"><input type="radio" name="view" value="docs" checked> Documents</label>
+        <label class="tab"><input type="radio" name="view" value="hits"> Matches</label>
+      </div>
       <button id="reset">Reset</button>
     </div>
     <div id="status" class="status"></div>
@@ -48,6 +54,9 @@
   <main>
     <div id="count" class="count"></div>
     <ul id="list" class="cards"></ul>
+
+    <div id="hitsHeader" class="count hidden"></div>
+    <div id="hits" class="hitlist hidden" tabindex="0" aria-label="Flat matches list (use ↑/↓ or j/k)"></div>
   </main>
 
   <footer>

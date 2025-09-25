@@ -36,9 +36,7 @@
     window.__a64_idx = idx;
     return idx;
   }
-  function htmlEscape(s){
-    return s.replace(/[&<>]/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c]));
-  }
+  function htmlEscape(s){ return s.replace(/[&<>]/g, c=>({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c])); }
   function makeSnippet(text, queryParts, pos, radius=90){
     const start = Math.max(0, pos - radius);
     const end = Math.min(text.length, pos + radius);
@@ -52,9 +50,11 @@
     let m;
     while((m = re.exec(text))){
       yield { index: m.index, len: (m[0]||'').length };
-      if(re.lastIndex === m.index) re.lastIndex++; // avoid zero-length loops
+      if(re.lastIndex === m.index) re.lastIndex++; // guard
     }
   }
+
+  // Existing: per-document (multi‑snippet) results
   async function searchMulti(q){
     const idx = await loadIndex();
     q = (q||'').trim();
@@ -75,23 +75,21 @@
       }
       if(!ok) continue;
 
-      // Build extraction regex from phrases if any, else terms; find ALL matches in original text
+      // Window all matches (prefer phrases if provided)
       const extractParts = (phrases.length ? phrases : terms).filter(Boolean);
       const rex = new RegExp(extractParts.map(escapeRe).join('|'), 'ig');
       const snippets = [];
-      const windows = []; // positions captured to avoid near-duplicates
+      const windows = [];
       let rawScore = 0;
       for(const m of findAll(doc.text, rex)){
         rawScore += 10;
-        // avoid overlapping/nearby windows producing near-identical snippets
         const near = windows.find(w => Math.abs(w - m.index) < 40);
         if(near !== undefined) continue;
         windows.push(m.index);
         snippets.push(makeSnippet(doc.text, parts, m.index));
-        if(snippets.length >= 200) break; // generous cap per doc
+        if(snippets.length >= 200) break;
       }
       if(snippets.length){
-        // phrase bonus
         rawScore += phrases.reduce((s,p)=> s + (doc.text.toLowerCase().includes(p.toLowerCase()) ? 50 + p.length : 0), 0);
         hits.push({ url: doc.url, count: snippets.length, snippets, score: rawScore });
       }
@@ -99,5 +97,44 @@
     hits.sort((a,b)=> b.count - a.count || b.score - a.score);
     return hits;
   }
+
+  // New: per‑occurrence flat results
+  async function searchOccurrences(q){
+    const idx = await loadIndex();
+    q = (q||'').trim();
+    if(!q) return [];
+    const { phrases, terms } = parseQuery(q);
+    const normPhrases = phrases.map(s=>normalize(s)).filter(Boolean);
+    const normTerms = terms.map(s=>normalize(s)).filter(Boolean);
+    const parts = phrases.concat(terms).filter(Boolean);
+    if(parts.length === 0) return [];
+
+    const occ = [];
+    for(const doc of idx){
+      let ok = true;
+      for(const p of normPhrases){ if(!doc.norm.includes(p)) { ok=false; break; } }
+      if(ok){
+        for(const t of normTerms){ if(!doc.norm.includes(t)) { ok=false; break; } }
+      }
+      if(!ok) continue;
+
+      const extractParts = (phrases.length ? phrases : terms).filter(Boolean);
+      const rex = new RegExp(extractParts.map(escapeRe).join('|'), 'ig');
+      let count = 0;
+      for(const m of findAll(doc.text, rex)){
+        const snippet = makeSnippet(doc.text, parts, m.index);
+        const score = (phrases.length ? 100 : 0) + 10; // simple per‑occurrence score
+        occ.push({ url: doc.url, title: doc.title, snippet, score, pos: m.index });
+        count++;
+        if(count >= 500) break; // cap per doc
+      }
+    }
+    // Sort by (doc title asc, then pos), but lightly prefer phrase matches via score
+    occ.sort((a,b)=> (b.score - a.score) || (a.title||'').localeCompare(b.title||'') || (a.pos - b.pos));
+    // Global cap to avoid massive DOM
+    return occ.slice(0, 2000);
+  }
+
   window.a64SearchFulltextMulti = searchMulti;
+  window.a64SearchOccurrences = searchOccurrences;
 })();
