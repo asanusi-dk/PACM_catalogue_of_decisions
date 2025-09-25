@@ -1,232 +1,228 @@
 #!/usr/bin/env python3
-# Scrape ONLY the "Current version" rows + the CMA table, and store exact page headings.
-# Each record gets:
-#  - section: nearest H2 text (e.g., "Standards", "CMA related decisions and documents")
-#  - subsection: nearest H3/H4 text if present (e.g., "Activity cycle", "Methodology")
-# The script merges with existing data to preserve manual 'notes' and other curated fields.
-
-import json, re, sys
-from urllib.parse import urljoin
+# -*- coding: utf-8 -*-
+"""
+Scrape the UNFCCC A6.4 Rules & Regulations page and produce data/a64_catalogue.json.
+Rules:
+- Use only "Current version" (or the main link for CMA/CMA reports).
+- Ignore everything under any "Forms" section.
+- Prefer English links where multiple languages are listed.
+- Capture section (H2) and subsection (H3/H4) labels exactly.
+- Create separate rows for CMA decisions 5/CMA.6 and 6/CMA.6 even if they share a PDF.
+"""
+import re, json, sys, os, time
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
-RULES_URL = "https://unfccc.int/process-and-meetings/bodies/constituted-bodies/article-64-supervisory-body/rules-and-regulations"
-OUT_JSON  = "data/a64_catalogue.json"
-HEADERS = {"User-Agent": "PACM-catalogue-bot/1.0 (+https://github.com)"}
+BASE = "https://unfccc.int"
+URL = BASE + "/process-and-meetings/bodies/constituted-bodies/article-64-supervisory-body/rules-and-regulations"
+
+SESSION = requests.Session()
+SESSION.headers.update({"User-Agent": "PACM-catalogue-bot/1.0 (+github action)"})
+TIMEOUT = 30
 
 def fetch(url):
-    r = requests.get(url, headers=HEADERS, timeout=60)
+    r = SESSION.get(url, timeout=TIMEOUT)
     r.raise_for_status()
     return r.text
 
-def clean_space(s): return " ".join((s or "").split())
+def clean(s):
+    if s is None: return ""
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s
 
-def nearest_headings(el):
-    # Walk back to find closest H2 (section) and then next H3/H4 (subsection)
+def parse_symbol(text):
+    # Try to locate A6.4-* or FCCC/PA/CMA references
+    m = re.search(r'(A6\.4-[A-Z/-]+-\d{3,}|\bFCCC/PA/CMA/\d{4}/[\w./-]+)', text, flags=re.I)
+    return m.group(1) if m else ""
+
+def only_english_link(a):
+    # Prefer links labeled (ENG) or English; otherwise take the link itself
+    t = (a.get_text(" ") or "").lower()
+    href = a.get("href") or ""
+    if "(eng)" in t or "english" in t:
+        return href
+    return href
+
+def heading_hierarchy_for(node):
+    # Find nearest h2, then between nearest h3/h4 after that
     sec = sub = ""
-    for prev in el.find_all_previous(["h2","h3","h4"]):
-        tag = prev.name.lower()
-        txt = clean_space(prev.get_text(" ", strip=True))
-        if tag == "h2" and not sec:
-            sec = txt
-        elif tag in ("h3","h4") and not sub:
-            sub = txt
-        if sec and sub:
-            break
+    # nearest h2 above
+    h2 = node.find_previous('h2')
+    if h2: sec = clean(h2.get_text(" "))
+    # then nearest h3/h4 above
+    h3 = node.find_previous(['h3','h4'])
+    if h3 and (not h2 or getattr(h3, 'sourceline', 0) > getattr(h2, 'sourceline', 0)):
+        sub = clean(h3.get_text(" "))
     return sec, sub
 
-def parse_current_version_table(table, section, subsection):
-    # Detect header columns
-    head = [clean_space(th.get_text(" ", strip=True)).lower() for th in table.find_all("th")]
-    if not any("current version" in h for h in head):
-        return []
-    rows = []
-    for tr in table.find_all("tr"):
-        tds = tr.find_all(["td","th"])
-        if len(tds) < 3:
-            continue
-        # Current version link + version text
-        link = None
-        ver = ""
-        try:
-            idx_cv = next(i for i,h in enumerate(head) if "current version" in h)
-            a = tds[idx_cv].find("a", href=True)
-            if a:
-                link = urljoin(RULES_URL, a["href"])
-                ver = clean_space(a.get_text(" ", strip=True))
-            else:
-                continue
-        except StopIteration:
-            continue
-        # Title
-        try:
-            idx_title = next(i for i,h in enumerate(head) if h.startswith("title"))
-            title = clean_space(tds[idx_title].get_text(" ", strip=True))
-        except StopIteration:
-            title = ""
-        # Symbol
-        symbol = ""
-        try:
-            idx_sym = next(i for i,h in enumerate(head) if "symbol" in h)
-            symbol = clean_space(tds[idx_sym].get_text(" ", strip=True))
-        except StopIteration:
-            pass
-        # Entry into force / publication date
-        date = ""
-        for key in ("entry into force","publication date","date of entry into force"):
-            try:
-                idx_date = next(i for i,h in enumerate(head) if key in h)
-                date = clean_space(tds[idx_date].get_text(" ", strip=True))
-                break
-            except StopIteration:
-                continue
+def table_rows_to_records(table):
+    recs = []
+    sec, sub = heading_hierarchy_for(table)
+    # skip any table under Forms
+    if "forms" in (sec or "").lower() or "forms" in (sub or "").lower():
+        return recs
 
-        rows.append({
+    for tr in table.select("tr"):
+        links = tr.select("a")
+        if not links: 
+            continue
+
+        def is_current(a):
+            txt = (a.get_text(" ") or "").strip().lower()
+            href = a.get("href") or ""
+            if "click here" in txt: return False
+            if href.lower().endswith((".doc",".docx",".xls",".xlsx")): return False
+            if "other language versions" in txt: return False
+            if "(word)" in txt.lower() or "(excel)" in txt.lower(): return False
+            return True
+
+        candidates = [a for a in links if is_current(a)]
+        if not candidates: 
+            continue
+
+        a = candidates[0]
+        href = only_english_link(a)
+        url = urljoin(BASE, href)
+
+        # Extract row text blocks for meta
+        tds = [clean(td.get_text(" ")) for td in tr.find_all(["td","th"])]
+        rowtxt = " | ".join(tds)
+        title = clean(a.get_text(" "))
+        if not title or title.lower().startswith("ver"):
+            if tds: title = tds[0]
+
+        symbol = parse_symbol(rowtxt + " " + url)
+        version = ""
+        ver_m = re.search(r'ver\.?\s*([0-9.]+)', rowtxt, flags=re.I)
+        if ver_m:
+            version = ver_m.group(1)
+        date = ""
+        date_m = re.search(r'(\d{1,2}\s\w+\s\d{4}|\d{1,2}\s\w+\.?\s\d{4}|[0-9]{1,2}\s\w+\.\s[0-9]{4}|[0-9]{1,2}\s\w+\s?[0-9]{4})', rowtxt)
+        if date_m:
+            date = date_m.group(1)
+
+        sec_norm = (sec or "").lower()
+        if "standard" in sec_norm: typ = "Standard"
+        elif "procedure" in sec_norm: typ = "Procedure"
+        elif "tool" in sec_norm: typ = "Tool"
+        elif "information note" in sec_norm: typ = "Information note"
+        elif "regular reports" in sec_norm: typ = "Regular report"
+        else: typ = ""
+
+        recs.append({
             "title": title,
-            "version": ver.replace("ver.","").strip(),
+            "url": url,
             "symbol": symbol,
+            "version": version,
             "date": date,
-            "url": link,
-            # exact headings from page
-            "section": section,
-            "subsection": subsection,
-            # keep old fields for compatibility
-            "type": "",
-            "category": "",
-            "notes": "",
-            "is_current": True,
-            "source_section": section or "Rules & Regulations"
+            "type": typ,
+            "section": sec,
+            "subsection": sub,
+            "notes": ""
         })
-    return rows
+    return recs
 
-def parse_cma_table(table, section):
-    # Must be in the CMA section; headers won't include "Current version"
-    head = [clean_space(th.get_text(" ", strip=True)).lower() for th in table.find_all("th")]
-    if any("current version" in h for h in head):
-        return []
-    if not any("title" in h for h in head):
-        return []
-    rows = []
-    for tr in table.find_all("tr"):
-        tds = tr.find_all(["td","th"])
-        if len(tds) < 1:
+def cma_blocks(soup):
+    recs = []
+    h2 = soup.find(lambda t: t.name in ['h2'] and "CMA related decisions and documents" in t.get_text())
+    if not h2: 
+        return recs
+
+    section_nodes = []
+    for sib in h2.next_siblings:
+        if getattr(sib, "name", None) == "h2": break
+        section_nodes.append(sib)
+
+    cur_sub = ""
+    for node in section_nodes:
+        if getattr(node, "name", None) in ["h3","h4"]:
+            cur_sub = clean(node.get_text(" "))
             continue
-        title = ""
-        link = None
-        symbol = ""
-        date = ""
+        for a in getattr(node, "select", lambda x: [])("a"):
+            href = a.get("href") or ""
+            text = clean(a.get_text(" "))
+            if not href: 
+                continue
+            if not ("/FCCC/PA/CMA/" in href or text.startswith("FCCC/PA/CMA") or href.lower().endswith(".pdf")):
+                continue
+            url = urljoin(BASE, href)
+            symbol = parse_symbol(text + " " + url)
+            title = text or symbol or "CMA document"
 
-        # Title + link
-        try:
-            idx_title = next(i for i,h in enumerate(head) if h.startswith("title"))
-            td = tds[idx_title]
-            title = clean_space(td.get_text(" ", strip=True))
-            a = td.find("a", href=True)
-            if a: link = urljoin(RULES_URL, a["href"])
-        except StopIteration:
-            # fallback: any link in row
-            a = tr.find("a", href=True)
-            if a:
-                link = urljoin(RULES_URL, a["href"])
-                title = title or clean_space(a.get_text(" ", strip=True))
-
-        # Symbol
-        try:
-            idx_sym = next(i for i,h in enumerate(head) if "symbol" in h)
-            symbol = clean_space(tds[idx_sym].get_text(" ", strip=True))
-        except StopIteration:
-            pass
-
-        if not title and not link:
-            continue
-
-        rows.append({
-            "title": title or symbol or "CMA document",
-            "version": "",
-            "symbol": symbol,
-            "date": date,
-            "url": link or "",
-            "section": section,
-            "subsection": "",
-            "type": "CMA decision",
-            "category": "CMA",
-            "notes": "",
-            "is_current": False,
-            "source_section": section
-        })
-    return rows
-
-def merge(old, new):
-    by_url = {r.get("url"): r for r in old if r.get("url")}
-    for r in new:
-        if r["url"] in by_url:
-            cur = by_url[r["url"]]
-            # Keep manual notes and any curated fields
-            for k,v in r.items():
-                if k == "notes" and cur.get("notes"):
+            # Special: 2024 Add.1 hosting both 5/CMA.6 and 6/CMA.6
+            if "CMA guidance" in cur_sub:
+                if "2024/17/Add.1" in url or "2024/17/Add.1" in symbol:
+                    recs.append({
+                        "title": "Decision 5/CMA.6 (Guidance on Article 6.4)",
+                        "url": url + "#5CMA6",
+                        "symbol": "5/CMA.6",
+                        "version": "",
+                        "date": "2024",
+                        "type": "CMA decision",
+                        "section": "CMA related decisions and documents",
+                        "subsection": "CMA guidance on Article 6.4",
+                        "notes": ""
+                    })
+                    recs.append({
+                        "title": "Decision 6/CMA.6 (Guidance on Article 6.4)",
+                        "url": url + "#6CMA6",
+                        "symbol": "6/CMA.6",
+                        "version": "",
+                        "date": "2024",
+                        "type": "CMA decision",
+                        "section": "CMA related decisions and documents",
+                        "subsection": "CMA guidance on Article 6.4",
+                        "notes": ""
+                    })
                     continue
-                if not cur.get(k) and (v not in (None, "")):
-                    cur[k] = v
-            # Always refresh section/subsection with current page headings
-            cur["section"] = r.get("section","") or cur.get("section","")
-            cur["subsection"] = r.get("subsection","") or cur.get("subsection","")
-        else:
-            by_url[r["url"]] = r
-    return list(by_url.values())
+
+            recs.append({
+                "title": title,
+                "url": url,
+                "symbol": symbol,
+                "version": "",
+                "date": "",
+                "type": "CMA decision" if "guidance" in cur_sub.lower() else "CMA report",
+                "section": "CMA related decisions and documents",
+                "subsection": cur_sub,
+                "notes": ""
+            })
+    out = []
+    seen = set()
+    for r in recs:
+        key = (r["title"], r["url"])
+        if key in seen: 
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
 
 def main():
-    html = fetch(RULES_URL)
+    html = fetch(URL)
     soup = BeautifulSoup(html, "lxml")
 
     records = []
-    for tb in soup.find_all("table"):
-      # Find exact headings above this table
-      section, subsection = nearest_headings(tb)
-      sec_low = (section or "").lower()
+    records.extend(cma_blocks(soup))
 
-      # CMA table (under CMA headings)
-      if "cma related decisions" in sec_low or "cma related documents" in sec_low:
-          rows = parse_cma_table(tb, section)
-          if rows: records.extend(rows)
-          continue
+    for table in soup.find_all("table"):
+        sec, sub = heading_hierarchy_for(table)
+        if "forms" in (sec or "").lower() or "forms" in (sub or "").lower():
+            continue
+        if "CMA related decisions and documents".lower() in (sec or "").lower():
+            continue
+        records.extend(table_rows_to_records(table))
 
-      # Current version tables
-      rows = parse_current_version_table(tb, section, subsection)
-      if rows:
-          records.extend(rows)
+    for r in records:
+        r["title"] = clean(r["title"])
+        r["section"] = clean(r["section"])
+        r["subsection"] = clean(r["subsection"])
 
-    # Merge with existing to keep notes, etc.
-    try:
-        with open(OUT_JSON, "r", encoding="utf-8") as f:
-            old = json.load(f)
-    except Exception:
-        old = []
+    os.makedirs("data", exist_ok=True)
+    with open("data/a64_catalogue.json","w",encoding="utf-8") as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
 
-    merged = merge(old, records)
-
-    # Tidy and sort: by section → subsection → symbol → title
-    for r in merged:
-        for k in list(r.keys()):
-            if isinstance(r[k], str):
-                r[k] = r[k].strip()
-        r.setdefault("notes","")
-        r.setdefault("section","")
-        r.setdefault("subsection","")
-
-    def sort_key(x):
-        return (
-            (x.get("section") or "").lower(),
-            (x.get("subsection") or "").lower(),
-            (x.get("symbol") or ""),
-            (x.get("title") or "").lower()
-        )
-
-    merged.sort(key=sort_key)
-
-    with open(OUT_JSON, "w", encoding="utf-8") as f:
-        json.dump(merged, f, ensure_ascii=False, indent=2)
-
-    print(f"[done] wrote {OUT_JSON} with {len(merged)} records (exact headings).")
+    print(f"Wrote {len(records)} records to data/a64_catalogue.json")
 
 if __name__ == "__main__":
     main()
