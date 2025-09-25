@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Regression-safe scraper for UNFCCC A6.4 catalogue:
-- ENG-only, Current version only, ignore Forms
-- Exclude A6.4-FORM-AC-014 / -013 / -002 instruction docs
-- Robust title selection, symbol inference
-- CMA decisions kept explicitly (Baku 5/6, Glasgow 3, Sharm 7)
-- Dedupe only when BOTH full URL and title are identical (keeps distinct CMA rows)
+UNFCCC A6.4 scraper (ENG-only, Current version only; ignore Forms) with:
+- Exclusions: A6.4-FORM-AC-014 / -013 / -002 instruction PDFs
+- Robust title selection; symbol inference; CMA decisions (Baku/Glasgow/Sharm) normalization
+- NEW: Any "Baku ... 5/CMA.6" or "Baku ... 6/CMA.6" title is forced to "Baku, Decision X/CMA.Y"
+       (works both inside CMA section and in any table)
+- NEW: SD tool tails trimmed robustly: remove " * Accompanying forms: ..." to end
+- NEW: If Symbol is empty but Date looks like a symbol, move Date → Symbol and clear Date
+- Dedupe only when both URL and title are identical
 """
 import json, re
 from urllib.parse import urljoin
@@ -17,7 +19,7 @@ BASE = "https://unfccc.int"
 URL  = BASE + "/process-and-meetings/bodies/constituted-bodies/article-64-supervisory-body/rules-and-regulations"
 
 S = requests.Session()
-S.headers.update({"User-Agent": "PACM-catalogue/1.3 (+github actions)"})
+S.headers.update({"User-Agent": "PACM-catalogue/1.4 (+github actions)"})
 TIMEOUT = 60
 
 FORM_EXCLUDE_RE = re.compile(r'(A6\.4-?FORM-AC-(014|013|002))', re.I)
@@ -83,32 +85,52 @@ def clean_symbol_text(sym):
     s = s.replace("other language versions","").strip(" -–—")
     return s
 
-def normalize_titles(record):
-    t = record["title"]
-    u = record["url"]
+def normalize_titles_and_fix_sdtool(record):
+    t = record["title"]; u = record["url"]
+
+    # Standardize capitalization for "Decision"
     t = re.sub(r',\s*decision', ', Decision', t, flags=re.I)
 
-    if "2024/17/Add.1" in u:
+    # Baku decisions (based on URL or title text, works anywhere)
+    if "2024/17/Add.1" in u or re.search(r'\bBaku\b', t, flags=re.I):
         m = DECISION_CODE_RE.search(t + " " + u)
-        if m: t = f"Baku, Decision {m.group(1)}"
+        if m and m.group(1) in {"5/CMA.6","6/CMA.6"}:
+            t = f"Baku, Decision {m.group(1)}"
 
-    for city in ("Glasgow","Sharm el-Sheikh"):
-        m = re.match(r'^\s*(' + re.escape(city) + r'),\s*Decision\s*(\d+/CMA\.\d).*$',
-                     re.sub(r'\s+', ' ', t), flags=re.I)
-        if m: t = f"{m.group(1)}, Decision {m.group(2)}"
+    # Glasgow 3/CMA.3
+    m = re.match(r'^\s*(Glasgow),\s*Decision\s*(\d+/CMA\.\d).*$',
+                 re.sub(r'\s+', ' ', t), flags=re.I)
+    if m: t = f"{m.group(1)}, Decision {m.group(2)}"
 
+    # Sharm el-Sheikh 7/CMA.4
+    m = re.match(r'^\s*(Sharm el-Sheikh),\s*Decision\s*(\d+/CMA\.\d).*$',
+                 re.sub(r'\s+', ' ', t), flags=re.I)
+    if m: t = f"{m.group(1)}, Decision {m.group(2)}"
+
+    # Generic "City, decision X/CMA.Y …"
     m = re.match(r'^\s*([^,]+),\s*decision\s*(\d+/CMA\.\d).*$',
                  record["title"], flags=re.I)
     if m and not any(city in t for city in ["Baku", "Glasgow", "Sharm el-Sheikh"]):
         t = f"{clean(m.group(1))}, Decision {m.group(2)}"
 
+    # Remove trailing date ranges in parentheses "(1 January - 31 December 2024)" etc.
     t = re.sub(r'\s*\(\s*\d{1,2}\s+\w+\s*-\s*\d{1,2}\s+\w+\s+\d{4}\s*\)\s*$', '', t)
 
+    # Robustly trim SD tool "Accompanying forms" tails
     if t.lower().startswith("article 6.4 sustainable development tool"):
-        t = re.split(r'\bAccompanying forms:\b', t, flags=re.I)[0].rstrip(" *—-–— ")
+        t = re.sub(r'\s*\*?\s*Accompanying forms:.*$', '', t, flags=re.I).rstrip(" *—-–— ")
 
     record["title"] = t
     record["symbol"] = clean_symbol_text(record.get("symbol",""))
+    return record
+
+def fix_symbol_date_swap(record):
+    # If symbol is empty but date looks like a symbol, move it.
+    sym = record.get("symbol","").strip()
+    date = record.get("date","").strip()
+    if (not sym) and (A64_SYMBOL_RE.search(date) or UN_DOC_RE.search(date)):
+        record["symbol"] = clean_symbol_text(date)
+        record["date"] = ""
     return record
 
 def parse_current_table(table):
@@ -131,7 +153,7 @@ def parse_current_table(table):
     idx_cv   = col_idx("current version")
     idx_ttl  = col_idx("title", "document", "document name", "name")
     idx_sym  = col_idx("symbol", "doc symbol")
-    idx_date = col_idx("entry into force", "publication date", "date of entry into force", "date")
+    idx_date = col_idx("entry into force", "entry into force / date", "publication date", "date of entry into force", "date")
 
     rows = []
     for tr in table.find_all("tr")[1:]:
@@ -161,12 +183,13 @@ def parse_current_table(table):
             continue
 
         sym_cell = clean(cells[idx_sym].get_text(" ")) if (idx_sym is not None and idx_sym < len(cells)) else ""
+        date_cell= clean(cells[idx_date].get_text(" ")) if (idx_date is not None and idx_date < len(cells)) else ""
+
         symbol = infer_symbol(sym_cell, url, title)
+        date   = date_cell
 
         if FORM_EXCLUDE_RE.search(" ".join([title, symbol, url])):
             continue
-
-        date   = clean(cells[idx_date].get_text(" ")) if (idx_date is not None and idx_date < len(cells)) else ""
 
         sec_low = sec.lower()
         if "standard" in sec_low: typ = "Standard"
@@ -176,10 +199,13 @@ def parse_current_table(table):
         elif "regular reports" in sec_low: typ = "Regular report"
         else: typ = ""
 
-        rows.append(normalize_titles({
+        row = {
             "title": title, "url": url, "symbol": symbol, "version": "", "date": date,
             "type": typ, "section": sec, "subsection": sub, "notes": ""
-        }))
+        }
+        row = normalize_titles_and_fix_sdtool(row)
+        row = fix_symbol_date_swap(row)
+        rows.append(row)
     return rows
 
 def parse_cma(soup):
@@ -200,29 +226,30 @@ def parse_cma(soup):
                 continue
             url = urljoin(BASE, href)
 
+            # Split/normalize Baku Add.1
             if "guidance" in cur_sub.lower() and ("2024/17/Add.1" in url or "2024/17/Add.1" in txt):
-                items.append(normalize_titles({
-                    "title":"Baku, Decision 5/CMA.6", "url":url+"#5CMA6",
-                    "symbol":"5/CMA.6","version":"","date":"2024","type":"CMA decision",
-                    "section":sec_title,"subsection":"CMA guidance on Article 6.4","notes":""
-                }))
-                items.append(normalize_titles({
-                    "title":"Baku, Decision 6/CMA.6", "url":url+"#6CMA6",
-                    "symbol":"6/CMA.6","version":"","date":"2024","type":"CMA decision",
-                    "section":sec_title,"subsection":"CMA guidance on Article 6.4","notes":""
-                }))
+                for code in ("5/CMA.6","6/CMA.6"):
+                    items.append({
+                        "title": f"Baku, Decision {code}",
+                        "url": url + ("#5CMA6" if code.startswith("5/") else "#6CMA6"),
+                        "symbol": code, "version":"", "date":"2024",
+                        "type":"CMA decision", "section":sec_title,
+                        "subsection":"CMA guidance on Article 6.4", "notes":""
+                    })
                 continue
 
             symbol = ""
             m = UN_DOC_RE.search(url + " " + txt)
             if m: symbol = m.group(1)
 
-            items.append(normalize_titles({
+            item = {
                 "title": txt or "CMA document", "url": url, "symbol": symbol, "version":"", "date":"",
                 "type": "CMA decision" if "guidance" in cur_sub.lower() else "CMA report",
                 "section": sec_title, "subsection": cur_sub, "notes": ""
-            }))
-    # Only collapse exact duplicates (same URL AND same title)
+            }
+            item = normalize_titles_and_fix_sdtool(item)
+            items.append(item)
+
     seen=set(); out=[]
     for r in items:
         k=(r["url"], r["title"])
