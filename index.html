@@ -3,17 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Article 6.4 Catalogue — Flat Hits View</title>
+  <title>Article 6.4 Catalogue</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <header>
-    <h1>Article 6.4 Catalogue</h1>
-    <p class="tagline">Current A6.4 regulatory documents + CMA decisions — full‑text searchable</p>
+  <header class="appbar">
+    <div class="appbar-inner">
+      <div class="brand">
+        <div class="dot"></div>
+        <h1>Article 6.4 Catalogue</h1>
+        <span class="tagline">Current A6.4 regulatory documents + CMA decisions — full‑text searchable</span>
+      </div>
+      <div class="bar-actions">
+        <button id="themeToggle" class="ghost" title="Toggle theme" aria-label="Toggle theme">🌗</button>
+      </div>
+    </div>
 
     <div class="controls">
       <input id="q" type="search" placeholder='Search… tip: use quotes for exact phrases, e.g. "reversal buffer"'>
-      <select id="type">
+      <select id="type" aria-label="Filter by type">
         <option value="">All types</option>
         <option>Standard</option>
         <option>Procedure</option>
@@ -23,17 +31,18 @@
         <option>Draft</option>
         <option>CMA decision</option>
       </select>
-      <select id="category">
+      <select id="category" aria-label="Filter by category">
         <option value="">All categories</option>
-        <option>Methodologies</option>
-        <option>Removals</option>
-        <option>Activity Cycle</option>
-        <option>Transition</option>
-        <option>Governance</option>
         <option>Accreditation</option>
+        <option>Activity Cycle</option>
+        <option>Methodology</option>
+        <option>Removals</option>
+        <option>Governance</option>
+        <option>Registry</option>
+        <option>Transition</option>
         <option>CMA</option>
       </select>
-      <select id="sort">
+      <select id="sort" aria-label="Sort order">
         <option value="date_desc">Newest first</option>
         <option value="date_asc">Oldest first</option>
         <option value="symbol">Symbol (A→Z)</option>
@@ -46,15 +55,18 @@
         <label class="tab"><input type="radio" name="view" value="docs" checked> Documents</label>
         <label class="tab"><input type="radio" name="view" value="hits"> Matches</label>
       </div>
-      <button id="reset">Reset</button>
+      <button id="reset" class="ghost">Reset</button>
     </div>
-    <div id="status" class="status"></div>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
   </header>
 
   <main>
     <div id="count" class="count"></div>
-    <ul id="list" class="cards"></ul>
 
+    <!-- Grouped docs container (JS fills this) -->
+    <div id="list"></div>
+
+    <!-- Flat hits view -->
     <div id="hitsHeader" class="count hidden"></div>
     <div id="hits" class="hitlist hidden" tabindex="0" aria-label="Flat matches list (use ↑/↓ or j/k)"></div>
   </main>
@@ -63,6 +75,7 @@
     <p>Source: UNFCCC A6.4 Supervisory Body – Rules & Regulations. Links point to official PDFs.</p>
   </footer>
 
+  <script src="assets/theme.js"></script>
   <script src="assets/app.js"></script>
   <script src="assets/fulltext.js"></script>
 </body>
