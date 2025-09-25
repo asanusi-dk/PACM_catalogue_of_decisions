@@ -1,7 +1,18 @@
 [
   {
-    "title": "Baku, decision 6/CMA.6 , relating to: the operation of the mechanism established by Article 6.4 of the Paris Agreement (PA); the methodologies under the mechanism established by Article 6.4 of the PA; the authorization of Article 6.4 emission reductions; the Article 6.4 mechanism registry; the special circumstances of the LDCs and SIDS with respect to share of proceeds for adaptation; the transition of CDM activities; the management of financial resource.",
+    "title": "Baku, Decision 6/CMA.6 , relating to: the operation of the mechanism established by Article 6.4 of the Paris Agreement (PA); the methodologies under the mechanism established by Article 6.4 of the PA; the authorization of Article 6.4 emission reductions; the Article 6.4 mechanism registry; the special circumstances of the LDCs and SIDS with respect to share of proceeds for adaptation; the transition of CDM activities; the management of financial resource.",
     "url": "https://unfccc.int/documents/644937",
+    "symbol": "",
+    "version": "",
+    "date": "",
+    "type": "",
+    "section": "UNFCCC Nav",
+    "subsection": "",
+    "notes": ""
+  },
+  {
+    "title": "Rules, modalities and procedures for the Article 6.4 mechanism (RMP)",
+    "url": "https://unfccc.int/sites/default/files/resource/cma2021_10a01E.pdf#page=25",
     "symbol": "",
     "version": "",
     "date": "",
@@ -99,7 +110,7 @@
     "notes": ""
   },
   {
-    "title": "Status of Article 6.4 mechanism resource allocation plan 2024 implementation (1 January - 31 December 2024)",
+    "title": "Status of Article 6.4 mechanism resource allocation plan 2024 implementation",
     "url": "https://unfccc.int/sites/default/files/resource/A6.4-INFO-GOV-023.pdf",
     "symbol": "A6.4-INFO-GOV-023",
     "version": "",
@@ -121,7 +132,7 @@
     "notes": ""
   },
   {
-    "title": "Status of Article 6.4 mechanism resource allocation plan 2025 implementation (1 January - 30 June 2025)",
+    "title": "Status of Article 6.4 mechanism resource allocation plan 2025 implementation",
     "url": "https://unfccc.int/sites/default/files/resource/A6.4-INFO-GOV-025.pdf",
     "symbol": "A6.4-INFO-GOV-025",
     "version": "",
@@ -462,22 +473,11 @@
     "notes": ""
   },
   {
-    "title": "Glasgow, decision 3/CMA.3 , including: Rules, modalities and procedures for the A6.4 mechanism (RMP)",
-    "url": "https://unfccc.int/sites/default/files/resource/cma2021_10a01E.pdf#page=25",
-    "symbol": "FCCC/PA/CMA/2021/10/Add.1 (ENG) other language versions",
-    "version": "",
-    "date": "",
-    "type": "",
-    "section": "UNFCCC Nav",
-    "subsection": "",
-    "notes": ""
-  },
-  {
-    "title": "Sharm el-Sheikh, decision 7/CMA.4 , including: Annex 1: Elaboration of the processes defined in the rules, modalities and procedures (transition of activities from CDM to A6.4; use of CERs towards NDCs; reporting on A6.4 activities and their emission reductions; operation of the mechanism registry; share of proceeds; delivering mitigation in global emissions) Annex 2: Rules of Procedure of the A6.4 mechanism Supervisory Body",
+    "title": "Rules of Procedure of the Article 6.4 mechanism Supervisory Body",
     "url": "https://unfccc.int/sites/default/files/resource/cma2023_10a02E.pdf#page=33",
-    "symbol": "FCCC/PA/CMA/2022/10/Add.2 (ENG) other language versions",
+    "symbol": "FCCC/PA/CMA/2022/10/Add.2",
     "version": "",
-    "date": "",
+    "date": "7/CMA.4 (Nov. 2022)",
     "type": "",
     "section": "UNFCCC Nav",
     "subsection": "",
@@ -486,7 +486,7 @@
   {
     "title": "Annual report (reporting period 28 Jul. - 22 Sep. 2022) Addendum (reporting period 23 Sep. - 6 Nov. 2022) Addendum includes the outcomes of the third meeting of the Supervisory Body and an update to CMA 4 on the work on removals and methodologies, as mandated by decision 3/CMA.3, paragraphs 6(c) and 6(d) respectively.",
     "url": "https://unfccc.int/sites/default/files/resource/cma2022_06E.pdf",
-    "symbol": "FCCC/PA/CMA/2022/6 FCCC/PA/CMA/2022/6/Add.1",
+    "symbol": "FCCC/PA/CMA/2022/6",
     "version": "",
     "date": "",
     "type": "",
@@ -497,7 +497,7 @@
   {
     "title": "Annual report (reporting period 7 Nov. 2022 - 14 Sep. 2023) Addendum (reporting period 15 Sep. - 2 Nov. 2023) Addendum includes recommendations on activities involving removals and on requirements for development and assessment of methodologies",
     "url": "https://unfccc.int/sites/default/files/resource/cma2023_L15E.pdf",
-    "symbol": "FCCC/PA/CMA/2023/15 FCCC/PA/CMA/2023/15/Add.1",
+    "symbol": "FCCC/PA/CMA/2023/15",
     "version": "",
     "date": "",
     "type": "",
@@ -508,7 +508,7 @@
   {
     "title": "Annual report (reporting period 18 Nov. 2023 - 18 Jul. 2024) Addendum (reporting period 19 Jul. 2024 - 9 Oct. 2024, which includes the 14th meeting of the Supervisory Body ) Addendum includes recommendations to note the further progress in work of the SBM in response to the mandates in decisions 3/CMA.3 and 7/CMA.4 and recommendations for the requirements for the development and assessment of methodologies and for activities involving removals",
     "url": "https://unfccc.int/node/637244",
-    "symbol": "FCCC/PA/CMA/2024/ 2 FCCC/PA/CMA/2024/2/Add.1",
+    "symbol": "FCCC/PA/CMA/2024/2/Add.1",
     "version": "",
     "date": "",
     "type": "",
