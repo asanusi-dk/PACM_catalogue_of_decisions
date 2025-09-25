@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Paris Agreement Crediting Mechanism Catalogue of Documents</title>
-  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="assets/style.css?v=4">
 </head>
 <body>
   <header class="appbar">
@@ -34,11 +34,7 @@
 
   <main>
     <div id="count" class="count"></div>
-
-    <!-- Container for Docs (list only) -->
     <div id="list"></div>
-
-    <!-- Flat hits view -->
     <div id="hitsHeader" class="count hidden"></div>
     <div id="hits" class="hitlist hidden" tabindex="0" aria-label="Flat matches list (use ↑/↓ or j/k)"></div>
   </main>
@@ -47,7 +43,8 @@
     <p>Source: UNFCCC A6.4 Supervisory Body – Rules & Regulations. Links point to official PDFs.</p>
   </footer>
 
-  <script src="assets/app.js"></script>
-  <script src="assets/fulltext.js"></script>
+  <!-- Load fulltext BEFORE app, with cache busters -->
+  <script src="assets/fulltext.js?v=4"></script>
+  <script src="assets/app.js?v=4"></script>
 </body>
 </html>
