@@ -4,7 +4,11 @@ async function loadData(){
     const res = await fetch('data/a64_catalogue.json', {cache: 'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status+' for data/a64_catalogue.json');
     const json = await res.json();
-    if(!Array.isArray(json) || json.length === 0){
+    if(!Array.isArray(json)){
+      status.textContent = 'Catalogue JSON is not an array.';
+      return [];
+    }
+    if(json.length === 0){
       status.textContent = 'Loaded catalogue but it is empty. If this is unexpected, run Actions → Scrape and Rebuild Index.';
     }else{
       status.textContent = '';
@@ -12,7 +16,7 @@ async function loadData(){
     return json;
   } catch (e) {
     console.error(e);
-    status.textContent = 'Could not load data/a64_catalogue.json — ' + e.message + '. Make sure the file exists in /data and GitHub Pages has published it.';
+    status.textContent = 'Could not load data/a64_catalogue.json — ' + e.message;
     return [];
   }
 }
@@ -22,6 +26,13 @@ function tokenize(s){ return normalize(s).split(' ').filter(Boolean); }
 function haystack(it){ return normalize(`${it.title} ${it.symbol} ${it.notes}`); }
 function matchesQuery(it, qTokens){ if(qTokens.length===0) return true; const hay = haystack(it); return qTokens.every(t => hay.includes(t)); }
 function getView(){ const v=document.querySelector('input[name="view"]:checked'); return v?v.value:'docs'; }
+
+function hideHits(){
+  const hits = document.getElementById('hits');
+  const hitsHeader = document.getElementById('hitsHeader');
+  if(hits){ hits.classList.add('hidden'); hits.innerHTML=''; }
+  if(hitsHeader){ hitsHeader.classList.add('hidden'); hitsHeader.textContent=''; }
+}
 
 function renderListFlat(items){
   const cont = document.getElementById('list');
@@ -176,8 +187,7 @@ function getFiltered(data, textHits){
     }else{
       document.getElementById('list').classList.remove('hidden');
       document.getElementById('count').classList.remove('hidden');
-      document.getElementById('hits').classList.add('hidden');
-      document.getElementById('hitsHeader').classList.add('hidden');
+      hideHits(); // ensure hits panel is hidden & cleared
 
       const items = getFiltered(data, lastDocHits);
       document.getElementById('count').textContent = `${items.length} document${items.length===1?'':'s'}`;
@@ -197,7 +207,18 @@ function getFiltered(data, textHits){
       const qEl = document.getElementById('q'); if(qEl) qEl.value='';
       const ftEl = document.getElementById('fulltextToggle'); if(ftEl) ftEl.checked=false;
       const viewDocs = document.querySelector('input[name="view"][value="docs"]'); if(viewDocs) viewDocs.checked = true;
+
+      // Clear state
       lastQ=''; lastDocHits=[]; lastOccHits=[];
+
+      // Hide & clear hits panel immediately
+      hideHits();
+
+      // Scroll to top and clear any hash
+      try { window.scrollTo({top:0, behavior:'auto'}); } catch(e){}
+      try { if(history && history.replaceState) history.replaceState(null,'',location.pathname); } catch(e){}
+
+      // Re-render full list
       run();
     });
   }
