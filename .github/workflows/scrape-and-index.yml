@@ -33,7 +33,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install beautifulsoup4 lxml requests
 
-      - name: Scrape current versions + CMA table
+      - name: Scrape current versions + CMA table (with exact headings)
         run: |
           python scripts/scrape_current_versions.py
 
@@ -44,7 +44,7 @@ jobs:
       - name: Commit updates
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update catalogue (current + CMA) & full-text index"
+          commit_message: "Update catalogue with exact headings & full-text index"
           file_pattern: |
             data/a64_catalogue.json
             search_index.json
