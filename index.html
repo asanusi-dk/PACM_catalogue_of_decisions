@@ -31,10 +31,10 @@
         <option>Draft</option>
         <option>CMA decision</option>
       </select>
-      <select id="category" aria-label="Filter by category">
-        <option value="">All categories</option>
+      <select id="category" aria-label="Filter by subsection/category">
+        <option value="">All subsections</option>
         <option>Accreditation</option>
-        <option>Activity Cycle</option>
+        <option>Activity cycle</option>
         <option>Methodology</option>
         <option>Removals</option>
         <option>Governance</option>
@@ -51,10 +51,17 @@
         <input id="fulltextToggle" type="checkbox">
         <span>Full‑text</span>
       </label>
+
       <div class="view-toggle" role="tablist" aria-label="Result view">
         <label class="tab"><input type="radio" name="view" value="docs" checked> Documents</label>
         <label class="tab"><input type="radio" name="view" value="hits"> Matches</label>
       </div>
+
+      <div class="layout-toggle" role="tablist" aria-label="Layout">
+        <label class="tab"><input type="radio" name="layout" value="list" checked> List</label>
+        <label class="tab"><input type="radio" name="layout" value="cards"> Cards</label>
+      </div>
+
       <button id="reset" class="ghost">Reset</button>
     </div>
     <div id="status" class="status" role="status" aria-live="polite"></div>
@@ -63,7 +70,7 @@
   <main>
     <div id="count" class="count"></div>
 
-    <!-- Grouped docs container (JS fills this) -->
+    <!-- Container for Docs view -->
     <div id="list"></div>
 
     <!-- Flat hits view -->

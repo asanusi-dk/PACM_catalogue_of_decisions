@@ -15,7 +15,6 @@ function haystack(it){ return normalize(`${it.title} ${it.symbol} ${it.notes}`);
 function matchesQuery(it, qTokens){ if(qTokens.length===0) return true; const hay = haystack(it); return qTokens.every(t => hay.includes(t)); }
 function cmp(a,b){ return a<b ? -1 : a>b ? 1 : 0; }
 
-// Preferred display order for known sections; unknowns appended alphabetically.
 const SECTION_ORDER = [
   "CMA related decisions and documents",
   "Regular reports to the Supervisory Body",
@@ -26,68 +25,40 @@ const SECTION_ORDER = [
   "Forms"
 ];
 
-function groupByHeadings(items){
-  // Build map: section -> subsection -> items
+function sectionIndex(name){
+  const i = SECTION_ORDER.indexOf(name||'');
+  return i === -1 ? 999 : i;
+}
+
+function getView(){ const v=document.querySelector('input[name="view"]:checked'); return v?v.value:'docs'; }
+function getLayout(){ const v=document.querySelector('input[name="layout"]:checked'); return v?v.value:'list'; }
+
+function renderCardsGrouped(items){
+  // Group by section->subsection
   const map = new Map();
   for(const it of items){
     const sec = (it.section || it.type || 'Other').trim();
-    const sub = (it.subsection || it.category || '').trim();
+    const sub = (it.subsection || it.category || 'General').trim();
     if(!map.has(sec)) map.set(sec, new Map());
     const submap = map.get(sec);
-    const key = sub || 'General';
-    if(!submap.has(key)) submap.set(key, []);
-    submap.get(key).push(it);
+    if(!submap.has(sub)) submap.set(sub, []);
+    submap.get(sub).push(it);
   }
-  // Order sections by preferred order then case-insensitive name
-  const sections = Array.from(map.entries()).map(([title, submap])=>({title, submap}));
-  sections.sort((a,b)=>{
-    const ai = SECTION_ORDER.indexOf(a.title);
-    const bi = SECTION_ORDER.indexOf(b.title);
-    const ao = ai === -1 ? 999 : ai;
-    const bo = bi === -1 ? 999 : bi;
-    return ao - bo || a.title.localeCompare(b.title);
-  });
-  // Order subsections alphabetically (but put common ones first if desired)
-  for(const s of sections){
-    const entries = Array.from(s.submap.entries()).map(([name, arr])=>({name, arr}));
-    entries.sort((a,b)=> a.name.localeCompare(b.name));
-    // Sort items inside each subgroup by date desc then symbol
-    for(const e of entries){
-      e.arr.sort((a,b)=> cmp(b.date||'', a.date||'') || cmp(a.symbol||'', b.symbol||''));
-    }
-    s.subgroups = entries;
-  }
-  return sections;
-}
-
-function renderSections(sections){
   const cont = document.getElementById('list');
   cont.innerHTML = '';
-  if(!sections.length){
-    cont.innerHTML = '<div style="opacity:.7">No results. Try a broader term or remove filters.</div>';
-    return;
-  }
-  const frag = document.createDocumentFragment();
+  const sections = Array.from(map.entries()).map(([title, submap])=>({title, submap}));
+  sections.sort((a,b)=> sectionIndex(a.title)-sectionIndex(b.title) || a.title.localeCompare(b.title));
   for(const sec of sections){
     const secDiv = document.createElement('section');
     secDiv.className = 'group';
-    secDiv.id = 'sec-' + sec.title.toLowerCase().replace(/[^a-z0-9]+/g,'-');
-    const h2 = document.createElement('h2');
-    h2.textContent = sec.title;
-    secDiv.appendChild(h2);
-
-    for(const sg of sec.subgroups){
-      const h3 = document.createElement('div');
-      h3.className = 'subhead';
-      h3.textContent = sg.name;
-      secDiv.appendChild(h3);
-
-      const ul = document.createElement('ul');
-      ul.className = 'cards';
+    const h2 = document.createElement('h2'); h2.textContent = sec.title; secDiv.appendChild(h2);
+    const subs = Array.from(sec.submap.entries()).map(([name, arr])=>({name, arr})).sort((a,b)=> a.name.localeCompare(b.name));
+    for(const sg of subs){
+      const h3 = document.createElement('div'); h3.className = 'subhead'; h3.textContent = sg.name; secDiv.appendChild(h3);
+      const ul = document.createElement('ul'); ul.className = 'cards';
+      sg.arr.sort((a,b)=> cmp(b.date||'', a.date||'') || cmp(a.symbol||'', b.symbol||''));
       for(const it of sg.arr){
-        const li = document.createElement('li');
-        li.className = 'card';
-        const snip = (it._snippets && it._snippets.length) ? `<div class="snip">${it._snippets[0]}</div>` : '';
+        const li = document.createElement('li'); li.className = 'card';
         li.innerHTML = `
           <h3><a href="${it.url}" target="_blank" rel="noopener">${it.title}</a></h3>
           <div class="meta">
@@ -95,25 +66,75 @@ function renderSections(sections){
             <span>v${it.version||''}</span>
             <span>• ${it.date||''}</span>
             <span>• ${it.type||''}</span>
-            <span>• ${(it.subsection||it.category||'').trim() || 'General'}</span>
+            <span>• ${(it.subsection||it.category||'').trim()||'General'}</span>
           </div>
-          <div class="notes">${it.notes||''}</div>
-          ${snip}
         `;
         ul.appendChild(li);
       }
       secDiv.appendChild(ul);
     }
-    frag.appendChild(secDiv);
+    cont.appendChild(secDiv);
   }
-  cont.appendChild(frag);
+}
+
+function renderListFlat(items){
+  // Single table for all items, sorted Section > Subsection > Title
+  const cont = document.getElementById('list');
+  cont.innerHTML = '';
+  if(!items.length){
+    cont.innerHTML = '<div style="opacity:.7">No results. Remove filters or try a broader term.</div>';
+    return;
+  }
+  // sort
+  items.sort((a,b)=> sectionIndex(a.section||a.type)-sectionIndex(b.section||b.type)
+                  || (a.section||'').localeCompare(b.section||'')
+                  || (a.subsection||'').localeCompare(b.subsection||'')
+                  || (a.symbol||'').localeCompare(b.symbol||'')
+                  || (a.title||'').localeCompare(b.title||''));
+
+  const wrap = document.createElement('div'); wrap.className = 'table-wrap';
+  const table = document.createElement('table'); table.className = 'table';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th class="col-title">Title</th>
+        <th class="col-symbol">Symbol</th>
+        <th>Version</th>
+        <th class="col-date">Entry into force / Date</th>
+        <th>Type</th>
+        <th class="col-section">Section</th>
+        <th class="col-subsection">Subsection</th>
+        <th class="pdf">PDF</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+  const tbody = table.querySelector('tbody');
+  const frag = document.createDocumentFragment();
+  for(const it of items){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="col-title"><a href="${it.url}" target="_blank" rel="noopener">${it.title||''}</a></td>
+      <td class="col-symbol">${it.symbol||''}</td>
+      <td>${it.version||''}</td>
+      <td class="col-date">${it.date||''}</td>
+      <td>${it.type||''}</td>
+      <td class="col-section">${it.section||it.type||''}</td>
+      <td class="col-subsection">${it.subsection||it.category||''}</td>
+      <td class="pdf"><a href="${it.url}" target="_blank" rel="noopener">Open</a></td>
+    `;
+    frag.appendChild(tr);
+  }
+  tbody.appendChild(frag);
+  wrap.appendChild(table);
+  cont.appendChild(wrap);
 }
 
 function renderHits(occ, metaByUrl){
   const cont = document.getElementById('hits');
   const header = document.getElementById('hitsHeader');
   cont.innerHTML = '';
-  header.innerHTML = `${occ.length} match${occ.length===1?'':'es'} — <span style="opacity:.8">Use ↑/↓ or j/k to navigate</span>`;
+  header.innerHTML = `${occ.length} match${occ.length===1?'':'es'} — <span class="kbd">↑</span>/<span class="kbd">↓</span> or <span class="kbd">j</span>/<span class="kbd">k</span>`;
   if(!occ.length){
     cont.innerHTML = '<div style="opacity:.7">No matches found.</div>';
     return;
@@ -139,22 +160,7 @@ function renderHits(occ, metaByUrl){
   cont.appendChild(frag);
 }
 
-function getViewMode(){ const v = document.querySelector('input[name="view"]:checked'); return v ? v.value : 'docs'; }
-function setContainersForView(view){
-  const list = document.getElementById('list');
-  const count = document.getElementById('count');
-  const hits = document.getElementById('hits');
-  const hitsHeader = document.getElementById('hitsHeader');
-  if(view === 'hits'){
-    list.classList.add('hidden'); count.classList.add('hidden');
-    hits.classList.remove('hidden'); hitsHeader.classList.remove('hidden');
-  }else{
-    list.classList.remove('hidden'); count.classList.remove('hidden');
-    hits.classList.add('hidden'); hitsHeader.classList.add('hidden');
-  }
-}
-
-function applyFiltersDocs(data, textHits){
+function getFiltered(data, textHits){
   const fulltextOn = document.getElementById('fulltextToggle')?.checked;
   const qRaw = document.getElementById('q')?.value || '';
   const qTokens = tokenize(qRaw);
@@ -174,27 +180,11 @@ function applyFiltersDocs(data, textHits){
   items = items.filter(it => {
     const matchMeta = matchesQuery(it, qTokens) || (fulltextOn ? (it._count>0) : false);
     const matchType = !type || it.type === type;
-    const matchCat = !category || (it.subsection||it.category||'') === category;
+    const matchCat = !category || (it.subsection||it.category||'').toLowerCase() === category.toLowerCase();
     return matchMeta && matchType && matchCat;
   });
 
-  const sections = groupByHeadings(items);
-  renderSections(sections);
-
-  const total = items.length;
-  document.getElementById('count').textContent = `${total} document${total===1?'':'s'}`;
-}
-
-function filterOccByMeta(occ, metaByUrl){
-  const type = document.getElementById('type')?.value || '';
-  const category = document.getElementById('category')?.value || '';
-  if(!type && !category) return occ;
-  return occ.filter(h => {
-    const m = metaByUrl[h.url] || {};
-    if(type && m.type !== type) return false;
-    if(category && (m.subsection||m.category||'') !== category) return false;
-    return true;
-  });
+  return items;
 }
 
 (async function init(){
@@ -208,19 +198,35 @@ function filterOccByMeta(occ, metaByUrl){
   async function run(){
     const q = document.getElementById('q')?.value || '';
     const useFull = document.getElementById('fulltextToggle')?.checked;
-    const view = getViewMode();
+    const view = getView();
+    const layout = getLayout();
+
     if(useFull && q !== lastQ){
       if(window.a64SearchFulltextMulti){ lastDocHits = await window.a64SearchFulltextMulti(q); } else { lastDocHits = []; }
       if(window.a64SearchOccurrences){ lastOccHits = await window.a64SearchOccurrences(q); } else { lastOccHits = []; }
       lastQ = q;
     }
+
     if(view === 'hits'){
-      setContainersForView('hits');
-      const filteredOcc = filterOccByMeta(lastOccHits, metaByUrl);
-      renderHits(filteredOcc, metaByUrl);
+      document.getElementById('list').classList.add('hidden');
+      document.getElementById('count').classList.add('hidden');
+      document.getElementById('hits').classList.remove('hidden');
+      document.getElementById('hitsHeader').classList.remove('hidden');
+      const occ = lastOccHits || [];
+      renderHits(occ, metaByUrl);
     }else{
-      setContainersForView('docs');
-      applyFiltersDocs(data, lastDocHits);
+      document.getElementById('list').classList.remove('hidden');
+      document.getElementById('count').classList.remove('hidden');
+      document.getElementById('hits').classList.add('hidden');
+      document.getElementById('hitsHeader').classList.add('hidden');
+
+      const items = getFiltered(data, lastDocHits);
+      document.getElementById('count').textContent = `${items.length} document${items.length===1?'':'s'}`;
+      if(layout === 'cards'){
+        renderCardsGrouped(items);
+      }else{
+        renderListFlat(items);
+      }
     }
   }
 
@@ -229,6 +235,7 @@ function filterOccByMeta(occ, metaByUrl){
     if(el){ el.addEventListener('input', run); el.addEventListener('change', run); }
   });
   document.querySelectorAll('input[name="view"]').forEach(r => r.addEventListener('change', run));
+  document.querySelectorAll('input[name="layout"]').forEach(r => r.addEventListener('change', run));
 
   const resetBtn = document.getElementById('reset');
   if(resetBtn){
@@ -239,9 +246,11 @@ function filterOccByMeta(occ, metaByUrl){
       const sEl = document.getElementById('sort'); if(sEl) sEl.value='date_desc';
       const ftEl = document.getElementById('fulltextToggle'); if(ftEl) ftEl.checked=false;
       const viewDocs = document.querySelector('input[name="view"][value="docs"]'); if(viewDocs) viewDocs.checked = true;
+      const layoutList = document.querySelector('input[name="layout"][value="list"]'); if(layoutList) layoutList.checked = true;
       lastQ=''; lastDocHits=[]; lastOccHits=[];
       run();
     });
   }
+
   run();
 })();
