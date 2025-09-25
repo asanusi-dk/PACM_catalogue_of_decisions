@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Hotfix scraper:
-- ENG-only, Current version only, ignore Forms.
-- Picks Title from explicit Title/Document column; avoids "ver. 01.0" & "Instructions".
-- De-duplicates by URL while preserving CMA 5/CMA.6 & 6/CMA.6 via URL fragments.
+Scrape UNFCCC A6.4 Rules & Regulations (ENG, Current version only; ignore Forms).
+Extra filter (per user request): exclude any row related to
+  A6.4-FORM-AC-014, A6.4-FORM-AC-013, A6.4-FORM-AC-002
+even if they are PDFs and not under the Forms section.
 """
 import json, re
 from urllib.parse import urljoin
@@ -24,6 +24,11 @@ def fetch(url):
 
 def clean(s): return re.sub(r"\s+", " ", (s or "")).strip()
 
+# Match any of the three form codes anywhere (title, symbol, URL)
+FORM_EXCLUDE_RE = re.compile(r'(A6\.4-?FORM-AC-(014|013|002))', re.I)
+BAD_TITLE_RE = re.compile(r'^(instructions?|english|click here|ver\.|version)\b', re.I)
+VERSION_RE   = re.compile(r'^\s*(ver\.|version)\s*[.:]?\s*\d+(?:\.\d+)*\s*$', re.I)
+
 def nearest_headings(node):
     h2 = node.find_previous("h2")
     sec = clean(h2.get_text(" ")) if h2 else ""
@@ -36,26 +41,25 @@ def english_link(a_tags):
     if eng: return eng[0]
     return a_tags[0] if a_tags else None
 
-_version_rx = re.compile(r'^\s*(ver\.|version)\s*[.:]?\s*\d+(?:\.\d+)*\s*$', re.I)
-_bad_title_rx = re.compile(r'^(instructions?|english|click here|ver\.|version)\b', re.I)
-
 def best_title(cells, idx_title, link):
-    # 1) Prefer the Title/Document column text
+    # Prefer Title/Document column, then first meaningful cell, then link text
     title = ""
     if idx_title is not None and 0 <= idx_title < len(cells):
         title = clean(cells[idx_title].get_text(" "))
-    # 2) Fallback to first meaningful cell from left
-    if not title or _version_rx.match(title) or _bad_title_rx.match(title):
+    if not title or VERSION_RE.match(title) or BAD_TITLE_RE.match(title):
         for td in cells:
             t = clean(td.get_text(" "))
-            if t and not _version_rx.match(t) and not _bad_title_rx.match(t):
+            if t and not VERSION_RE.match(t) and not BAD_TITLE_RE.match(t):
                 title = t; break
-    # 3) Last resort, use the link text if it's not just ENG/version
-    if (not title or _version_rx.match(title) or _bad_title_rx.match(title)) and link is not None:
+    if (not title or VERSION_RE.match(title) or BAD_TITLE_RE.match(title)) and link is not None:
         t = clean(link.get_text(" "))
-        if t and not _version_rx.match(t) and not _bad_title_rx.match(t):
+        if t and not VERSION_RE.match(t) and not BAD_TITLE_RE.match(t):
             title = t
     return title
+
+def should_exclude_form(title, symbol, url):
+    blob = " ".join([title or "", symbol or "", url or ""])
+    return bool(FORM_EXCLUDE_RE.search(blob))
 
 def parse_current_table(table):
     sec, sub = nearest_headings(table)
@@ -100,17 +104,21 @@ def parse_current_table(table):
 
         href = link.get("href","")
         if not href: continue
+        # skip obvious office docs
         if href.lower().endswith((".doc",".docx",".xls",".xlsx")):
-            continue  # skip forms/files
+            continue
         url = urljoin(BASE, href)
 
         title = best_title(cells, idx_ttl, link)
-        if not title or _version_rx.match(title) or _bad_title_rx.match(title):
-            # If still bad, skip the row (prevents "ver. 01.0" / "Instructions")
+        if not title or VERSION_RE.match(title) or BAD_TITLE_RE.match(title):
             continue
 
         symbol = clean(cells[idx_sym].get_text(" ")) if (idx_sym is not None and idx_sym < len(cells)) else ""
         date   = clean(cells[idx_date].get_text(" ")) if (idx_date is not None and idx_date < len(cells)) else ""
+
+        # NEW: exclude specific form-instruction docs even if PDFs
+        if should_exclude_form(title, symbol, url):
+            continue
 
         sec_low = sec.lower()
         if "standard" in sec_low: typ = "Standard"
@@ -143,7 +151,9 @@ def parse_cma(soup):
             if not ("/FCCC/PA/CMA/" in href or txt.startswith("FCCC/PA/CMA") or href.lower().endswith(".pdf")):
                 continue
             url = urljoin(BASE, href)
+            # Exclusion does not apply here (CMA decisions/reports are not forms)
 
+            # special handling for 2024 Add.1 – split 5/CMA.6 and 6/CMA.6
             if "guidance" in cur_sub.lower() and ("2024/17/Add.1" in url or "2024/17/Add.1" in txt):
                 items.append({
                     "title":"Decision 5/CMA.6 (Guidance on Article 6.4)", "url":url+"#5CMA6",
@@ -157,13 +167,14 @@ def parse_cma(soup):
                 })
                 continue
 
-            if _bad_title_rx.match(txt) or _version_rx.match(txt):
-                continue  # don't bring in junk CMA anchors
+            if BAD_TITLE_RE.match(txt) or VERSION_RE.match(txt):
+                continue
             items.append({
                 "title": txt or "CMA document", "url": url, "symbol": "", "version":"", "date":"",
                 "type": "CMA decision" if "guidance" in cur_sub.lower() else "CMA report",
                 "section": sec_title, "subsection": cur_sub, "notes": ""
             })
+    # de-dupe
     seen=set(); out=[]
     for r in items:
         k=(r["url"], r["title"].lower())
@@ -181,16 +192,15 @@ def main():
         if "cma related decisions and documents" in sec.lower(): continue
         recs += parse_current_table(tb)
 
-    # De-duplicate by URL (full) — preserves CMA entries with #fragments
+    # De-duplicate by full URL (keeps CMA #fragments as separate items)
     dedup = {}
     for r in recs:
-        url = r["url"]
-        if url not in dedup:
-            dedup[url] = r
+        u = r["url"]
+        if u not in dedup:
+            dedup[u] = r
         else:
-            # prefer the entry whose title is longer (less likely to be generic)
-            if len(r.get("title","")) > len(dedup[url].get("title","")):
-                dedup[url] = r
+            if len(r.get("title","")) > len(dedup[u].get("title","")):
+                dedup[u] = r
 
     out = list(dedup.values())
     out.sort(key=lambda x: (x.get("section",""), x.get("subsection",""), x.get("symbol",""), x.get("title","")))
