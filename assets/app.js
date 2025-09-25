@@ -4,7 +4,11 @@ async function loadData(){
     const res = await fetch('data/a64_catalogue.json', {cache: 'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status+' for data/a64_catalogue.json');
     const json = await res.json();
-    status.textContent = '';  // clear if successful
+    if(!Array.isArray(json) || json.length === 0){
+      status.textContent = 'Loaded catalogue but it is empty. If this is unexpected, run Actions → Scrape and Rebuild Index.';
+    }else{
+      status.textContent = '';
+    }
     return json;
   } catch (e) {
     console.error(e);
@@ -17,7 +21,6 @@ function normalize(s){return (s||'').toLowerCase().normalize('NFKD').replace(/[^
 function tokenize(s){ return normalize(s).split(' ').filter(Boolean); }
 function haystack(it){ return normalize(`${it.title} ${it.symbol} ${it.notes}`); }
 function matchesQuery(it, qTokens){ if(qTokens.length===0) return true; const hay = haystack(it); return qTokens.every(t => hay.includes(t)); }
-
 function getView(){ const v=document.querySelector('input[name="view"]:checked'); return v?v.value:'docs'; }
 
 function renderListFlat(items){
@@ -48,9 +51,22 @@ function renderListFlat(items){
   const tbody = table.querySelector('tbody');
   const frag = document.createDocumentFragment();
   for(const it of items){
+    const snippets = it._snippets || [];
+    const hasSnips = snippets.length > 0;
+    const id = btoa((it.url||it.title||Math.random().toString(36))).replace(/=+/g,'');
+    const snipBlock = hasSnips ? `
+      <div class="snips collapsed" id="snips-${id}">
+        ${snippets.map(s=>`<div class="snip">${s}</div>`).join('')}
+      </div>
+      <button class="toggle-snips" data-target="snips-${id}" aria-expanded="false">Show all ${snippets.length} match${snippets.length===1?'':'es'}</button>
+    ` : '';
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="col-title"><a href="${it.url}" target="_blank" rel="noopener">${it.title||''}</a></td>
+      <td class="col-title">
+        <a href="${it.url}" target="_blank" rel="noopener">${it.title||''}</a>
+        ${snipBlock}
+      </td>
       <td class="col-symbol">${it.symbol||''}</td>
       <td>${it.version||''}</td>
       <td class="col-date">${it.date||''}</td>
@@ -60,6 +76,25 @@ function renderListFlat(items){
   tbody.appendChild(frag);
   wrap.appendChild(table);
   cont.appendChild(wrap);
+
+  cont.querySelectorAll('.toggle-snips').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-target');
+      const block = document.getElementById(id);
+      const expanded = block && !block.classList.contains('collapsed');
+      if(block){
+        if(expanded){
+          block.classList.add('collapsed');
+          btn.textContent = btn.textContent.replace('Show fewer', 'Show all');
+          btn.setAttribute('aria-expanded','false');
+        }else{
+          block.classList.remove('collapsed');
+          btn.textContent = btn.textContent.replace('Show all', 'Show fewer');
+          btn.setAttribute('aria-expanded','true');
+        }
+      }
+    });
+  });
 }
 
 function renderHits(occ, metaByUrl){
