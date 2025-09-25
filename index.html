@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Article 6.4 Catalogue (MVP)</title>
+  <title>Article 6.4 Catalogue — with Full‑text Search (Beta)</title>
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
   <header>
-    <h1>Article 6.4 Catalogue (MVP)</h1>
-    <p class="tagline">Search and filter Supervisory Body regulatory documents & related notes</p>
+    <h1>Article 6.4 Catalogue</h1>
+    <p class="tagline">Search Supervisory Body regulatory documents & related notes</p>
     <div class="controls">
-      <input id="q" type="search" placeholder="Search title, symbol, notes…">
+      <input id="q" type="search" placeholder="Search metadata (title, symbol, notes)…">
       <select id="type">
         <option value="">All types</option>
         <option>Standard</option>
@@ -34,10 +34,17 @@
         <option value="date_asc">Oldest first</option>
         <option value="symbol">Symbol (A→Z)</option>
       </select>
+      <label class="toggle">
+        <input id="fulltextToggle" type="checkbox">
+        <span>Full‑text (beta)</span>
+      </label>
+      <button id="reset">Reset</button>
     </div>
+    <div id="status" class="status"></div>
   </header>
 
   <main>
+    <div id="count" class="count"></div>
     <ul id="list" class="cards"></ul>
   </main>
 
@@ -46,5 +53,6 @@
   </footer>
 
   <script src="assets/app.js"></script>
+  <script src="assets/fulltext.js"></script>
 </body>
 </html>

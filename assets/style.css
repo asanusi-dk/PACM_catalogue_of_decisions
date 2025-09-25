@@ -1,12 +1,16 @@
 
-:root { --bg:#0b0f14; --card:#121820; --ink:#e8f0ff; --muted:#9db0c8; --accent:#7bd; }
+:root { --bg:#0b0f14; --card:#121820; --ink:#e8f0ff; --muted:#9db0c8; --accent:#7bd; --hl:#ffeb99; }
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui, Segoe UI, Roboto, sans-serif;}
 header{padding:24px 20px 0;max-width:1100px;margin:0 auto;}
 h1{margin:0 0 4px;font-size:28px;letter-spacing:0.2px;}
 .tagline{margin:0 0 14px;color:var(--muted)}
 .controls{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 16px}
-.controls input,.controls select{padding:10px 12px;border:1px solid #223042;background:#0e141c;color:var(--ink);border-radius:10px;outline:none;}
+.controls input,.controls select,.controls button{padding:10px 12px;border:1px solid #223042;background:#0e141c;color:var(--ink);border-radius:10px;outline:none;}
+.controls button{cursor:pointer}
+.toggle{display:flex;align-items:center;gap:6px;color:#bcd;user-select:none}
+.status{color:#ffcf8a;margin:6px 0 0 2px;font-size:13px;min-height:1em}
+.count{color:#9db0c8;margin:4px 0 10px 2px;font-size:13px;min-height:1em}
 main{max-width:1100px;margin:0 auto;padding:8px 20px 40px;}
 .cards{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
 .card{background:var(--card);border:1px solid #1c2835;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:6px;box-shadow:0 3px 10px rgba(0,0,0,.25)}
@@ -16,4 +20,6 @@ main{max-width:1100px;margin:0 auto;padding:8px 20px 40px;}
 .card a{color:#bfe3ff;text-decoration:none}
 .card a:hover{text-decoration:underline}
 .notes{color:#c8d6e8;font-size:14px;margin-top:4px}
+.snip{font-size:13px;color:#cfe;opacity:.95;background:rgba(255,255,255,.04);border:1px solid #203040;border-radius:10px;padding:8px;margin-top:4px}
+.mark{background:var(--hl);color:#000;padding:0 2px;border-radius:3px}
 footer{max-width:1100px;margin:0 auto;padding:10px 20px 30px;color:#98aac2;font-size:13px;border-top:1px solid #122031}
