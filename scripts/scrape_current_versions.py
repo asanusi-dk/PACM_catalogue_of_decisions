@@ -2,12 +2,14 @@
 # -*- coding: utf-8 -*-
 """
 Scrape UNFCCC A6.4 Rules & Regulations (ENG, Current version only; ignore Forms).
-Extra filter (per user request): exclude any row related to
-  A6.4-FORM-AC-014, A6.4-FORM-AC-013, A6.4-FORM-AC-002
-even if they are PDFs and not under the Forms section.
+Enhancements:
+- Exclude form-instruction docs (A6.4-FORM-AC-014 / -013 / -002).
+- Prefer Title/Document cell for titles; avoid "ver. 01.0" / "Instructions".
+- **Infer missing symbols** from URL or title (A6.4-...-NNN or FCCC/PA/CMA/...).
+- De-duplicate by full URL while preserving CMA 5/CMA.6 & 6/CMA.6 via #fragments.
 """
 import json, re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 import requests
 from bs4 import BeautifulSoup
 
@@ -15,19 +17,24 @@ BASE = "https://unfccc.int"
 URL  = BASE + "/process-and-meetings/bodies/constituted-bodies/article-64-supervisory-body/rules-and-regulations"
 
 S = requests.Session()
-S.headers.update({"User-Agent": "PACM-catalogue/1.0 (+github actions)"})
+S.headers.update({"User-Agent": "PACM-catalogue/1.1 (+github actions)"})
+TIMEOUT = 60
+
+FORM_EXCLUDE_RE = re.compile(r'(A6\.4-?FORM-AC-(014|013|002))', re.I)
+BAD_TITLE_RE    = re.compile(r'^(instructions?|english|click here|ver\.|version)\b', re.I)
+VERSION_RE      = re.compile(r'^\s*(ver\.|version)\s*[.:]?\s*\d+(?:\.\d+)*\s*$', re.I)
+
+# Symbols like A6.4-PROC-GOV-007 or A6.4-INFO-GOV-024
+A64_SYMBOL_RE   = re.compile(r'(A6\.4-[A-Z]+(?:-[A-Z]+)*-\d{3})', re.I)
+# UN doc symbols like FCCC/PA/CMA/2024/17/Add.1
+UN_DOC_RE       = re.compile(r'(FCCC/PA/CMA/\d{4}/[\w./-]+)', re.I)
 
 def fetch(url):
-    r = S.get(url, timeout=60)
+    r = S.get(url, timeout=TIMEOUT)
     r.raise_for_status()
     return r.text
 
 def clean(s): return re.sub(r"\s+", " ", (s or "")).strip()
-
-# Match any of the three form codes anywhere (title, symbol, URL)
-FORM_EXCLUDE_RE = re.compile(r'(A6\.4-?FORM-AC-(014|013|002))', re.I)
-BAD_TITLE_RE = re.compile(r'^(instructions?|english|click here|ver\.|version)\b', re.I)
-VERSION_RE   = re.compile(r'^\s*(ver\.|version)\s*[.:]?\s*\d+(?:\.\d+)*\s*$', re.I)
 
 def nearest_headings(node):
     h2 = node.find_previous("h2")
@@ -42,7 +49,6 @@ def english_link(a_tags):
     return a_tags[0] if a_tags else None
 
 def best_title(cells, idx_title, link):
-    # Prefer Title/Document column, then first meaningful cell, then link text
     title = ""
     if idx_title is not None and 0 <= idx_title < len(cells):
         title = clean(cells[idx_title].get_text(" "))
@@ -57,9 +63,22 @@ def best_title(cells, idx_title, link):
             title = t
     return title
 
-def should_exclude_form(title, symbol, url):
-    blob = " ".join([title or "", symbol or "", url or ""])
-    return bool(FORM_EXCLUDE_RE.search(blob))
+def infer_symbol(symbol_text, url, title):
+    # 1) Use provided symbol if looks valid (not empty, not em dash)
+    st = clean(symbol_text or "")
+    if st and st not in {"-", "—", "N/A", "n/a"}:
+        return st
+    src = " ".join([url or "", title or ""])
+    # 2) From URL (filename/path) try A6.4-...-NNN
+    m = A64_SYMBOL_RE.search(src)
+    if m: return m.group(1)
+    # 3) From URL/text try FCCC/PA/CMA/...
+    m = UN_DOC_RE.search(src)
+    if m: return m.group(1)
+    # 4) From title itself
+    m = A64_SYMBOL_RE.search(title or "")
+    if m: return m.group(1)
+    return ""
 
 def parse_current_table(table):
     sec, sub = nearest_headings(table)
@@ -104,21 +123,22 @@ def parse_current_table(table):
 
         href = link.get("href","")
         if not href: continue
-        # skip obvious office docs
         if href.lower().endswith((".doc",".docx",".xls",".xlsx")):
-            continue
+            continue  # skip office forms
         url = urljoin(BASE, href)
 
         title = best_title(cells, idx_ttl, link)
         if not title or VERSION_RE.match(title) or BAD_TITLE_RE.match(title):
             continue
 
-        symbol = clean(cells[idx_sym].get_text(" ")) if (idx_sym is not None and idx_sym < len(cells)) else ""
-        date   = clean(cells[idx_date].get_text(" ")) if (idx_date is not None and idx_date < len(cells)) else ""
+        sym_cell = clean(cells[idx_sym].get_text(" ")) if (idx_sym is not None and idx_sym < len(cells)) else ""
+        symbol = infer_symbol(sym_cell, url, title)
 
-        # NEW: exclude specific form-instruction docs even if PDFs
-        if should_exclude_form(title, symbol, url):
+        # Exclude specific form instruction docs
+        if FORM_EXCLUDE_RE.search(" ".join([title, symbol, url])):
             continue
+
+        date   = clean(cells[idx_date].get_text(" ")) if (idx_date is not None and idx_date < len(cells)) else ""
 
         sec_low = sec.lower()
         if "standard" in sec_low: typ = "Standard"
@@ -151,9 +171,8 @@ def parse_cma(soup):
             if not ("/FCCC/PA/CMA/" in href or txt.startswith("FCCC/PA/CMA") or href.lower().endswith(".pdf")):
                 continue
             url = urljoin(BASE, href)
-            # Exclusion does not apply here (CMA decisions/reports are not forms)
 
-            # special handling for 2024 Add.1 – split 5/CMA.6 and 6/CMA.6
+            # special split for 2024 Add.1
             if "guidance" in cur_sub.lower() and ("2024/17/Add.1" in url or "2024/17/Add.1" in txt):
                 items.append({
                     "title":"Decision 5/CMA.6 (Guidance on Article 6.4)", "url":url+"#5CMA6",
@@ -167,10 +186,15 @@ def parse_cma(soup):
                 })
                 continue
 
+            # try to infer symbol for CMA items too
+            symbol = ""
+            m = UN_DOC_RE.search(url + " " + txt)
+            if m: symbol = m.group(1)
+
             if BAD_TITLE_RE.match(txt) or VERSION_RE.match(txt):
                 continue
             items.append({
-                "title": txt or "CMA document", "url": url, "symbol": "", "version":"", "date":"",
+                "title": txt or "CMA document", "url": url, "symbol": symbol, "version":"", "date":"",
                 "type": "CMA decision" if "guidance" in cur_sub.lower() else "CMA report",
                 "section": sec_title, "subsection": cur_sub, "notes": ""
             })
@@ -192,7 +216,7 @@ def main():
         if "cma related decisions and documents" in sec.lower(): continue
         recs += parse_current_table(tb)
 
-    # De-duplicate by full URL (keeps CMA #fragments as separate items)
+    # De-duplicate by full URL; keep longest title on conflict
     dedup = {}
     for r in recs:
         u = r["url"]
