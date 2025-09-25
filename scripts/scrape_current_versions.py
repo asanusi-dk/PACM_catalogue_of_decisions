@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# Scrape ONLY the "Current version" rows + the CMA table, and store exact page headings.
+# Each record gets:
+#  - section: nearest H2 text (e.g., "Standards", "CMA related decisions and documents")
+#  - subsection: nearest H3/H4 text if present (e.g., "Activity cycle", "Methodology")
+# The script merges with existing data to preserve manual 'notes' and other curated fields.
+
 import json, re, sys
 from urllib.parse import urljoin
 import requests
@@ -13,14 +19,14 @@ def fetch(url):
     r.raise_for_status()
     return r.text
 
-def clean_space(s):
-    return " ".join((s or "").split())
+def clean_space(s): return " ".join((s or "").split())
 
-def nearest_heading_text(el):
+def nearest_headings(el):
+    # Walk back to find closest H2 (section) and then next H3/H4 (subsection)
     sec = sub = ""
     for prev in el.find_all_previous(["h2","h3","h4"]):
         tag = prev.name.lower()
-        txt = " ".join(prev.get_text(" ", strip=True).split())
+        txt = clean_space(prev.get_text(" ", strip=True))
         if tag == "h2" and not sec:
             sec = txt
         elif tag in ("h3","h4") and not sub:
@@ -29,7 +35,8 @@ def nearest_heading_text(el):
             break
     return sec, sub
 
-def parse_current_version_table(table):
+def parse_current_version_table(table, section, subsection):
+    # Detect header columns
     head = [clean_space(th.get_text(" ", strip=True)).lower() for th in table.find_all("th")]
     if not any("current version" in h for h in head):
         return []
@@ -38,8 +45,7 @@ def parse_current_version_table(table):
         tds = tr.find_all(["td","th"])
         if len(tds) < 3:
             continue
-        cells = [clean_space(td.get_text(" ", strip=True)) for td in tds]
-        # link to current version
+        # Current version link + version text
         link = None
         ver = ""
         try:
@@ -52,23 +58,20 @@ def parse_current_version_table(table):
                 continue
         except StopIteration:
             continue
-
-        # title
+        # Title
         try:
             idx_title = next(i for i,h in enumerate(head) if h.startswith("title"))
             title = clean_space(tds[idx_title].get_text(" ", strip=True))
         except StopIteration:
             title = ""
-
-        # symbol number
+        # Symbol
         symbol = ""
         try:
             idx_sym = next(i for i,h in enumerate(head) if "symbol" in h)
             symbol = clean_space(tds[idx_sym].get_text(" ", strip=True))
         except StopIteration:
             pass
-
-        # entry into force / publication date
+        # Entry into force / publication date
         date = ""
         for key in ("entry into force","publication date","date of entry into force"):
             try:
@@ -84,70 +87,72 @@ def parse_current_version_table(table):
             "symbol": symbol,
             "date": date,
             "url": link,
-            "type": "",        # to be filled from headings
-            "category": "",    # to be filled from headings
+            # exact headings from page
+            "section": section,
+            "subsection": subsection,
+            # keep old fields for compatibility
+            "type": "",
+            "category": "",
             "notes": "",
             "is_current": True,
-            "source_section": "Rules & Regulations (Current versions)"
+            "source_section": section or "Rules & Regulations"
         })
     return rows
 
-def parse_cma_table(table):
-    # This table lives under heading "CMA related decisions and documents"
-    # Its headers do NOT include "Current version"; typically includes Title and Symbol columns.
+def parse_cma_table(table, section):
+    # Must be in the CMA section; headers won't include "Current version"
     head = [clean_space(th.get_text(" ", strip=True)).lower() for th in table.find_all("th")]
     if any("current version" in h for h in head):
         return []
-    # Must at least have "title" and "symbol" or a link column
     if not any("title" in h for h in head):
         return []
     rows = []
     for tr in table.find_all("tr"):
         tds = tr.find_all(["td","th"])
-        if len(tds) < 2:
+        if len(tds) < 1:
             continue
-        cells = [clean_space(td.get_text(" ", strip=True)) for td in tds]
-        # map columns loosely
         title = ""
-        symbol = ""
         link = None
+        symbol = ""
         date = ""
-        # title + link (prefer link from title cell)
+
+        # Title + link
         try:
             idx_title = next(i for i,h in enumerate(head) if h.startswith("title"))
-            title_td = tds[idx_title]
-            title = clean_space(title_td.get_text(" ", strip=True))
-            a = title_td.find("a", href=True)
+            td = tds[idx_title]
+            title = clean_space(td.get_text(" ", strip=True))
+            a = td.find("a", href=True)
+            if a: link = urljoin(RULES_URL, a["href"])
+        except StopIteration:
+            # fallback: any link in row
+            a = tr.find("a", href=True)
             if a:
                 link = urljoin(RULES_URL, a["href"])
-        except StopIteration:
-            pass
-        # symbol
+                title = title or clean_space(a.get_text(" ", strip=True))
+
+        # Symbol
         try:
             idx_sym = next(i for i,h in enumerate(head) if "symbol" in h)
             symbol = clean_space(tds[idx_sym].get_text(" ", strip=True))
         except StopIteration:
             pass
-        # if no link yet, look for any link in the row
-        if not link:
-            a2 = tr.find("a", href=True)
-            if a2:
-                link = urljoin(RULES_URL, a2["href"])
 
         if not title and not link:
             continue
 
         rows.append({
             "title": title or symbol or "CMA document",
-            "version": "",  # CMA docs are static
+            "version": "",
             "symbol": symbol,
             "date": date,
             "url": link or "",
+            "section": section,
+            "subsection": "",
             "type": "CMA decision",
             "category": "CMA",
             "notes": "",
             "is_current": False,
-            "source_section": "CMA related decisions and documents"
+            "source_section": section
         })
     return rows
 
@@ -156,9 +161,15 @@ def merge(old, new):
     for r in new:
         if r["url"] in by_url:
             cur = by_url[r["url"]]
+            # Keep manual notes and any curated fields
             for k,v in r.items():
-                if not cur.get(k) and v not in (None, ""):
+                if k == "notes" and cur.get("notes"):
+                    continue
+                if not cur.get(k) and (v not in (None, "")):
                     cur[k] = v
+            # Always refresh section/subsection with current page headings
+            cur["section"] = r.get("section","") or cur.get("section","")
+            cur["subsection"] = r.get("subsection","") or cur.get("subsection","")
         else:
             by_url[r["url"]] = r
     return list(by_url.values())
@@ -168,52 +179,23 @@ def main():
     soup = BeautifulSoup(html, "lxml")
 
     records = []
-    # Parse all tables; classify by nearest headings
     for tb in soup.find_all("table"):
-        sec, sub = nearest_heading_text(tb)
-        sec_l = (sec or "").lower()
-        # CMA table: under h2/h3 that contains "cma related decisions"
-        if "cma related decisions" in sec_l or "cma related documents" in sec_l:
-            cma_rows = parse_cma_table(tb)
-            if cma_rows:
-                records.extend(cma_rows)
-                continue
-        # Current version tables
-        rows = parse_current_version_table(tb)
-        if rows:
-            # set types/categories from headings
-            for r in rows:
-                if "standard" in sec_l:
-                    r["type"] = "Standard"
-                elif "procedure" in sec_l:
-                    r["type"] = "Procedure"
-                elif "tool" in sec_l:
-                    r["type"] = "Tool"
-                elif "information" in sec_l:
-                    r["type"] = "Information note"
-                elif "form" in sec_l:
-                    r["type"] = "Form"
-                elif "report" in sec_l:
-                    r["type"] = "Report"
-                # category
-                sub_l = (sub or "").lower()
-                if "methodolog" in sub_l:
-                    r["category"] = "Methodologies"
-                elif any(k in sub_l for k in ["activity","registration","issuance","renewal","validation","verification","programmes"]):
-                    r["category"] = "Activity Cycle"
-                elif "accredit" in sub_l:
-                    r["category"] = "Accreditation"
-                elif "govern" in sub_l:
-                    r["category"] = "Governance"
-                elif any(k in sub_l for k in ["removal","reversal","non-perman"]):
-                    r["category"] = "Removals"
-                elif "transition" in sub_l:
-                    r["category"] = "Transition"
-                else:
-                    r["category"] = sub or r.get("category") or ""
-            records.extend(rows)
+      # Find exact headings above this table
+      section, subsection = nearest_headings(tb)
+      sec_low = (section or "").lower()
 
-    # Merge with existing file to preserve manual notes
+      # CMA table (under CMA headings)
+      if "cma related decisions" in sec_low or "cma related documents" in sec_low:
+          rows = parse_cma_table(tb, section)
+          if rows: records.extend(rows)
+          continue
+
+      # Current version tables
+      rows = parse_current_version_table(tb, section, subsection)
+      if rows:
+          records.extend(rows)
+
+    # Merge with existing to keep notes, etc.
     try:
         with open(OUT_JSON, "r", encoding="utf-8") as f:
             old = json.load(f)
@@ -221,19 +203,30 @@ def main():
         old = []
 
     merged = merge(old, records)
-    # Tidy
+
+    # Tidy and sort: by section → subsection → symbol → title
     for r in merged:
         for k in list(r.keys()):
             if isinstance(r[k], str):
                 r[k] = r[k].strip()
         r.setdefault("notes","")
-        r.setdefault("type","")
-        r.setdefault("category","")
+        r.setdefault("section","")
+        r.setdefault("subsection","")
 
-    merged.sort(key=lambda x: (x.get("type",""), x.get("category",""), x.get("symbol",""), x.get("title","").lower()))
+    def sort_key(x):
+        return (
+            (x.get("section") or "").lower(),
+            (x.get("subsection") or "").lower(),
+            (x.get("symbol") or ""),
+            (x.get("title") or "").lower()
+        )
+
+    merged.sort(key=sort_key)
+
     with open(OUT_JSON, "w", encoding="utf-8") as f:
         json.dump(merged, f, ensure_ascii=False, indent=2)
-    print(f"[done] wrote {OUT_JSON} with {len(merged)} records (current + CMA).")
+
+    print(f"[done] wrote {OUT_JSON} with {len(merged)} records (exact headings).")
 
 if __name__ == "__main__":
     main()

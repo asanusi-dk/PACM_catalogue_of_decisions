@@ -9,86 +9,57 @@ async function loadData(){
   }
 }
 
-function normalize(s){
-  return (s||'')
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^\w\s.-]/g, ' ')
-    .replace(/\s+/g,' ')
-    .trim();
-}
+function normalize(s){return (s||'').toLowerCase().normalize('NFKD').replace(/[^\w\s.-]/g,' ').replace(/\s+/g,' ').trim();}
 function tokenize(s){ return normalize(s).split(' ').filter(Boolean); }
 function haystack(it){ return normalize(`${it.title} ${it.symbol} ${it.notes}`); }
 function matchesQuery(it, qTokens){ if(qTokens.length===0) return true; const hay = haystack(it); return qTokens.every(t => hay.includes(t)); }
 function cmp(a,b){ return a<b ? -1 : a>b ? 1 : 0; }
 
-// -------- Grouping logic --------
+// Preferred display order for known sections; unknowns appended alphabetically.
 const SECTION_ORDER = [
-  { key: 'CMA',  title: 'CMA related decisions and documents', match: it => (it.type||'').toLowerCase() === 'cma decision' },
-  { key: 'REPORTS', title: 'Regular reports to the Supervisory Body', match: it => {
-      const t = (it.title||'').toLowerCase();
-      const sym = (it.symbol||'').toUpperCase();
-      return t.startsWith('status of article 6.4 mechanism resource allocation plan') || sym.startsWith('A6.4-INFO-GOV-023') || sym.startsWith('A6.4-INFO-GOV-025');
-    }},
-  { key: 'STAN', title: 'Standards',   match: it => (it.type||'').toLowerCase() === 'standard' },
-  { key: 'PROC', title: 'Procedures',  match: it => (it.type||'').toLowerCase() === 'procedure' },
-  { key: 'TOOL', title: 'Tools',       match: it => (it.type||'').toLowerCase() === 'tool' },
-  { key: 'INFO', title: 'Information notes', match: it => (it.type||'').toLowerCase() === 'information note' },
-  { key: 'FORM', title: 'Forms',       match: it => (it.type||'').toLowerCase().startsWith('form') }
+  "CMA related decisions and documents",
+  "Regular reports to the Supervisory Body",
+  "Standards",
+  "Procedures",
+  "Tools",
+  "Information notes",
+  "Forms"
 ];
 
-const SUBCAT_ORDER = ['Accreditation','Activity Cycle','Methodology','Removals','Governance','Registry','Transition','CMA','Other'];
-
-function displaySubcatName(cat){
-  if(!cat) return 'Other';
-  const c = cat.toLowerCase();
-  if(c.startsWith('methodolog')) return 'Methodology';
-  if(c.startsWith('activity')) return 'Activity Cycle';
-  if(c.startsWith('accred')) return 'Accreditation';
-  if(c.startsWith('govern')) return 'Governance';
-  if(c.startsWith('removal') || c.startsWith('non-perman')) return 'Removals';
-  if(c.startsWith('regis')) return 'Registry';
-  if(c.startsWith('transit')) return 'Transition';
-  if(c==='cma') return 'CMA';
-  return cat;
-}
-
-function groupItems(items){
-  // Make a copy
-  const pool = [...items];
-  const sections = [];
-  for(const sec of SECTION_ORDER){
-    const take = pool.filter(it => sec.match(it));
-    if(!take.length) continue;
-    // remove from pool
-    for(const it of take){
-      const idx = pool.indexOf(it);
-      if(idx>-1) pool.splice(idx,1);
+function groupByHeadings(items){
+  // Build map: section -> subsection -> items
+  const map = new Map();
+  for(const it of items){
+    const sec = (it.section || it.type || 'Other').trim();
+    const sub = (it.subsection || it.category || '').trim();
+    if(!map.has(sec)) map.set(sec, new Map());
+    const submap = map.get(sec);
+    const key = sub || 'General';
+    if(!submap.has(key)) submap.set(key, []);
+    submap.get(key).push(it);
+  }
+  // Order sections by preferred order then case-insensitive name
+  const sections = Array.from(map.entries()).map(([title, submap])=>({title, submap}));
+  sections.sort((a,b)=>{
+    const ai = SECTION_ORDER.indexOf(a.title);
+    const bi = SECTION_ORDER.indexOf(b.title);
+    const ao = ai === -1 ? 999 : ai;
+    const bo = bi === -1 ? 999 : bi;
+    return ao - bo || a.title.localeCompare(b.title);
+  });
+  // Order subsections alphabetically (but put common ones first if desired)
+  for(const s of sections){
+    const entries = Array.from(s.submap.entries()).map(([name, arr])=>({name, arr}));
+    entries.sort((a,b)=> a.name.localeCompare(b.name));
+    // Sort items inside each subgroup by date desc then symbol
+    for(const e of entries){
+      e.arr.sort((a,b)=> cmp(b.date||'', a.date||'') || cmp(a.symbol||'', b.symbol||''));
     }
-    // subgroup by category
-    const submap = new Map();
-    for(const it of take){
-      const name = displaySubcatName(it.category||'');
-      if(!submap.has(name)) submap.set(name, []);
-      submap.get(name).push(it);
-    }
-    // order subcats
-    const subcats = Array.from(submap.entries()).map(([name, arr])=>({name, arr}));
-    subcats.sort((a,b)=>{
-      const ai = SUBCAT_ORDER.indexOf(a.name); const bi = SUBCAT_ORDER.indexOf(b.name);
-      const aidx = ai===-1 ? 999 : ai; const bidx = bi===-1 ? 999 : bi;
-      return aidx - bidx || a.name.localeCompare(b.name);
-    });
-    // sort items inside each subcat
-    for(const sg of subcats){
-      sg.arr.sort((a,b)=> cmp(b.date||'', a.date||'') || cmp(a.symbol||'', b.symbol||''));
-    }
-    sections.push({title: sec.title, subcats});
+    s.subgroups = entries;
   }
   return sections;
 }
 
-// -------- Rendering --------
 function renderSections(sections){
   const cont = document.getElementById('list');
   cont.innerHTML = '';
@@ -105,7 +76,7 @@ function renderSections(sections){
     h2.textContent = sec.title;
     secDiv.appendChild(h2);
 
-    for(const sg of sec.subcats){
+    for(const sg of sec.subgroups){
       const h3 = document.createElement('div');
       h3.className = 'subhead';
       h3.textContent = sg.name;
@@ -116,7 +87,7 @@ function renderSections(sections){
       for(const it of sg.arr){
         const li = document.createElement('li');
         li.className = 'card';
-        const snips = (it._snippets && it._snippets.length) ? `<div class="snip">${it._snippets[0]}</div>` : '';
+        const snip = (it._snippets && it._snippets.length) ? `<div class="snip">${it._snippets[0]}</div>` : '';
         li.innerHTML = `
           <h3><a href="${it.url}" target="_blank" rel="noopener">${it.title}</a></h3>
           <div class="meta">
@@ -124,10 +95,10 @@ function renderSections(sections){
             <span>v${it.version||''}</span>
             <span>• ${it.date||''}</span>
             <span>• ${it.type||''}</span>
-            <span>• ${displaySubcatName(it.category||'')}</span>
+            <span>• ${(it.subsection||it.category||'').trim() || 'General'}</span>
           </div>
           <div class="notes">${it.notes||''}</div>
-          ${snips}
+          ${snip}
         `;
         ul.appendChild(li);
       }
@@ -158,7 +129,7 @@ function renderHits(occ, metaByUrl){
       <div class="meta">
         ${meta.symbol ? `<span>${meta.symbol}</span> • ` : ''}
         ${meta.type ? `<span>${meta.type}</span> • ` : ''}
-        ${displaySubcatName(meta.category||'') ? `<span>${displaySubcatName(meta.category||'')}</span> • ` : ''}
+        ${(meta.subsection||meta.category) ? `<span>${(meta.subsection||meta.category)}</span> • ` : ''}
         ${meta.date ? `<span>${meta.date}</span>` : ''}
       </div>
       <div class="snip">${h.snippet}</div>
@@ -168,7 +139,6 @@ function renderHits(occ, metaByUrl){
   cont.appendChild(frag);
 }
 
-// -------- Controllers --------
 function getViewMode(){ const v = document.querySelector('input[name="view"]:checked'); return v ? v.value : 'docs'; }
 function setContainersForView(view){
   const list = document.getElementById('list');
@@ -201,20 +171,16 @@ function applyFiltersDocs(data, textHits){
     return hit ? {...it, _snippets: hit.snippets, _score: hit.score, _count: hit.count} : {...it, _snippets: null, _score: 0, _count: 0};
   });
 
-  // filters
   items = items.filter(it => {
     const matchMeta = matchesQuery(it, qTokens) || (fulltextOn ? (it._count>0) : false);
     const matchType = !type || it.type === type;
-    const catName = displaySubcatName(it.category||'');
-    const matchCat = !category || catName === category;
+    const matchCat = !category || (it.subsection||it.category||'') === category;
     return matchMeta && matchType && matchCat;
   });
 
-  // Group and render
-  const sections = groupItems(items);
+  const sections = groupByHeadings(items);
   renderSections(sections);
 
-  // Count
   const total = items.length;
   document.getElementById('count').textContent = `${total} document${total===1?'':'s'}`;
 }
@@ -225,9 +191,8 @@ function filterOccByMeta(occ, metaByUrl){
   if(!type && !category) return occ;
   return occ.filter(h => {
     const m = metaByUrl[h.url] || {};
-    const catName = displaySubcatName(m.category||'');
     if(type && m.type !== type) return false;
-    if(category && catName !== category) return false;
+    if(category && (m.subsection||m.category||'') !== category) return false;
     return true;
   });
 }
