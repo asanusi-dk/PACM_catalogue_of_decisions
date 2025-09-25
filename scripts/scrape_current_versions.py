@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Scrape UNFCCC A6.4 Rules & Regulations (ENG, Current version only; ignore Forms).
-Enhancements:
-- Exclude form-instruction docs (A6.4-FORM-AC-014 / -013 / -002).
-- Prefer Title/Document cell for titles; avoid "ver. 01.0" / "Instructions".
-- **Infer missing symbols** from URL or title (A6.4-...-NNN or FCCC/PA/CMA/...).
-- De-duplicate by full URL while preserving CMA 5/CMA.6 & 6/CMA.6 via #fragments.
+Scrape UNFCCC A6.4 (ENG-only, Current version only; ignore Forms) with:
+- Exclude A6.4-FORM-AC-014 / -013 / -002 (form instructions)
+- Robust title selection (avoids "ver. 01.0", "Instructions", etc.)
+- Symbol inference from URL/title (A6.4-...-NNN or FCCC/PA/CMA/...)
+- Dedupe by full URL (keeps CMA fragments)
+- Normalization rules:
+  * "Baku, Decision 5/CMA.6" and "Baku, Decision 6/CMA.6" for 2024 Add.1 items
+  * "Glasgow, Decision 3/CMA.3"
+  * "Sharm el-Sheikh, Decision 7/CMA.4"
+  * Remove trailing date ranges in parentheses from "Status of ... resource allocation plan ..." titles
+  * Trim "Accompanying forms: ..." from the Sustainable development tool title
+  * Clean symbol text to drop "(ENG) other language versions"
 """
 import json, re
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
@@ -17,17 +23,16 @@ BASE = "https://unfccc.int"
 URL  = BASE + "/process-and-meetings/bodies/constituted-bodies/article-64-supervisory-body/rules-and-regulations"
 
 S = requests.Session()
-S.headers.update({"User-Agent": "PACM-catalogue/1.1 (+github actions)"})
+S.headers.update({"User-Agent": "PACM-catalogue/1.2 (+github actions)"})
 TIMEOUT = 60
 
 FORM_EXCLUDE_RE = re.compile(r'(A6\.4-?FORM-AC-(014|013|002))', re.I)
 BAD_TITLE_RE    = re.compile(r'^(instructions?|english|click here|ver\.|version)\b', re.I)
 VERSION_RE      = re.compile(r'^\s*(ver\.|version)\s*[.:]?\s*\d+(?:\.\d+)*\s*$', re.I)
 
-# Symbols like A6.4-PROC-GOV-007 or A6.4-INFO-GOV-024
 A64_SYMBOL_RE   = re.compile(r'(A6\.4-[A-Z]+(?:-[A-Z]+)*-\d{3})', re.I)
-# UN doc symbols like FCCC/PA/CMA/2024/17/Add.1
 UN_DOC_RE       = re.compile(r'(FCCC/PA/CMA/\d{4}/[\w./-]+)', re.I)
+DECISION_CODE_RE= re.compile(r'(\d+/CMA\.\d)', re.I)
 
 def fetch(url):
     r = S.get(url, timeout=TIMEOUT)
@@ -64,21 +69,63 @@ def best_title(cells, idx_title, link):
     return title
 
 def infer_symbol(symbol_text, url, title):
-    # 1) Use provided symbol if looks valid (not empty, not em dash)
     st = clean(symbol_text or "")
     if st and st not in {"-", "—", "N/A", "n/a"}:
         return st
-    src = " ".join([url or "", title or ""])
-    # 2) From URL (filename/path) try A6.4-...-NNN
-    m = A64_SYMBOL_RE.search(src)
+    blob = " ".join([url or "", title or ""])
+    m = A64_SYMBOL_RE.search(blob)
     if m: return m.group(1)
-    # 3) From URL/text try FCCC/PA/CMA/...
-    m = UN_DOC_RE.search(src)
+    m = UN_DOC_RE.search(blob)
     if m: return m.group(1)
-    # 4) From title itself
     m = A64_SYMBOL_RE.search(title or "")
     if m: return m.group(1)
-    return ""
+    return st
+
+def clean_symbol_text(sym):
+    s = clean(sym or "")
+    m = A64_SYMBOL_RE.search(s) or UN_DOC_RE.search(s)
+    if m: s = m.group(1)
+    s = re.sub(r'\s*\(ENG\).*$', '', s, flags=re.I)
+    s = s.replace("other language versions","").strip(" -–—")
+    return s
+
+def normalize_titles(record):
+    t = record["title"]
+    u = record["url"]
+    t = re.sub(r',\s*decision', ', Decision', t, flags=re.I)
+
+    # Baku decisions (2024 Add.1)
+    if "2024/17/Add.1" in u:
+        m = DECISION_CODE_RE.search(t + " " + u)
+        if m:
+            t = f"Baku, Decision {m.group(1)}"
+
+    # Glasgow 3/CMA.3
+    m = re.match(r'^\s*(Glasgow),\s*Decision\s*(\d+/CMA\.\d).*$',
+                 re.sub(r'\s+', ' ', t), flags=re.I)
+    if m: t = f"{m.group(1)}, Decision {m.group(2)}"
+
+    # Sharm el-Sheikh 7/CMA.4
+    m = re.match(r'^\s*(Sharm el-Sheikh),\s*Decision\s*(\d+/CMA\.\d).*$',
+                 re.sub(r'\s+', ' ', t), flags=re.I)
+    if m: t = f"{m.group(1)}, Decision {m.group(2)}"
+
+    # Generic "City, decision X/CMA.Y …"
+    m = re.match(r'^\s*([^,]+),\s*decision\s*(\d+/CMA\.\d).*$',
+                 record["title"], flags=re.I)
+    if m and not any(city in t for city in ["Baku", "Glasgow", "Sharm el-Sheikh"]):
+        t = f"{clean(m.group(1))}, Decision {m.group(2)}"
+
+    # Remove trailing date ranges in parentheses "(1 January - 31 December 2024)" etc.
+    t = re.sub(r'\s*\(\s*\d{1,2}\s+\w+\s*-\s*\d{1,2}\s+\w+\s+\d{4}\s*\)\s*$', '', t)
+
+    # Trim "Accompanying forms: ..." tail for SD tool
+    if t.lower().startswith("article 6.4 sustainable development tool"):
+        t = re.split(r'\bAccompanying forms:\b', t, flags=re.I)[0].rstrip(" *—-–— ")
+
+    record["title"] = t
+    record["symbol"] = clean_symbol_text(record.get("symbol",""))
+    return record
 
 def parse_current_table(table):
     sec, sub = nearest_headings(table)
@@ -107,7 +154,6 @@ def parse_current_table(table):
         cells = tr.find_all(["td","th"])
         if not cells: continue
 
-        # pick link from Current version column, else any link in row
         link = None
         if idx_cv is not None and idx_cv < len(cells):
             link_tags = cells[idx_cv].find_all("a", href=True)
@@ -117,14 +163,13 @@ def parse_current_table(table):
             link_tags = tr.find_all("a", href=True)
             if link_tags:
                 link = english_link(link_tags)
-
         if link is None: 
             continue
 
         href = link.get("href","")
         if not href: continue
         if href.lower().endswith((".doc",".docx",".xls",".xlsx")):
-            continue  # skip office forms
+            continue
         url = urljoin(BASE, href)
 
         title = best_title(cells, idx_ttl, link)
@@ -134,7 +179,6 @@ def parse_current_table(table):
         sym_cell = clean(cells[idx_sym].get_text(" ")) if (idx_sym is not None and idx_sym < len(cells)) else ""
         symbol = infer_symbol(sym_cell, url, title)
 
-        # Exclude specific form instruction docs
         if FORM_EXCLUDE_RE.search(" ".join([title, symbol, url])):
             continue
 
@@ -148,10 +192,10 @@ def parse_current_table(table):
         elif "regular reports" in sec_low: typ = "Regular report"
         else: typ = ""
 
-        rows.append({
+        rows.append(normalize_titles({
             "title": title, "url": url, "symbol": symbol, "version": "", "date": date,
             "type": typ, "section": sec, "subsection": sub, "notes": ""
-        })
+        }))
     return rows
 
 def parse_cma(soup):
@@ -172,33 +216,27 @@ def parse_cma(soup):
                 continue
             url = urljoin(BASE, href)
 
-            # special split for 2024 Add.1
             if "guidance" in cur_sub.lower() and ("2024/17/Add.1" in url or "2024/17/Add.1" in txt):
-                items.append({
-                    "title":"Decision 5/CMA.6 (Guidance on Article 6.4)", "url":url+"#5CMA6",
+                items.append(normalize_titles({
+                    "title":"Baku, Decision 5/CMA.6", "url":url+"#5CMA6",
                     "symbol":"5/CMA.6","version":"","date":"2024","type":"CMA decision",
                     "section":sec_title,"subsection":"CMA guidance on Article 6.4","notes":""
-                })
-                items.append({
-                    "title":"Decision 6/CMA.6 (Guidance on Article 6.4)", "url":url+"#6CMA6",
+                }))
+                items.append(normalize_titles({
+                    "title":"Baku, Decision 6/CMA.6", "url":url+"#6CMA6",
                     "symbol":"6/CMA.6","version":"","date":"2024","type":"CMA decision",
                     "section":sec_title,"subsection":"CMA guidance on Article 6.4","notes":""
-                })
+                }))
                 continue
 
-            # try to infer symbol for CMA items too
             symbol = ""
             m = UN_DOC_RE.search(url + " " + txt)
             if m: symbol = m.group(1)
-
-            if BAD_TITLE_RE.match(txt) or VERSION_RE.match(txt):
-                continue
-            items.append({
+            items.append(normalize_titles({
                 "title": txt or "CMA document", "url": url, "symbol": symbol, "version":"", "date":"",
                 "type": "CMA decision" if "guidance" in cur_sub.lower() else "CMA report",
                 "section": sec_title, "subsection": cur_sub, "notes": ""
-            })
-    # de-dupe
+            }))
     seen=set(); out=[]
     for r in items:
         k=(r["url"], r["title"].lower())
@@ -216,7 +254,6 @@ def main():
         if "cma related decisions and documents" in sec.lower(): continue
         recs += parse_current_table(tb)
 
-    # De-duplicate by full URL; keep longest title on conflict
     dedup = {}
     for r in recs:
         u = r["url"]
