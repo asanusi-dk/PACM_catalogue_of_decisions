@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-UNFCCC A6.4 scraper (ENG-only, Current version only; ignore Forms) with:
-- Exclusions: A6.4-FORM-AC-014 / -013 / -002 instruction PDFs
-- Robust title selection; symbol inference; CMA decisions (Baku/Glasgow/Sharm) normalization
-- NEW: Any "Baku ... 5/CMA.6" or "Baku ... 6/CMA.6" title is forced to "Baku, Decision X/CMA.Y"
-       (works both inside CMA section and in any table)
-- NEW: SD tool tails trimmed robustly: remove " * Accompanying forms: ..." to end
-- NEW: If Symbol is empty but Date looks like a symbol, move Date → Symbol and clear Date
-- Dedupe only when both URL and title are identical
+UNFCCC A6.4 scraper (ENG-only, Current version only; ignore Forms)
+Includes:
+- Exclude A6.4-FORM-AC-014 / -013 / -002 instruction PDFs
+- Robust title selection; symbol inference; symbol/date swap fix
+- Title normalization (Baku 5/6, Glasgow 3, Sharm 7; SD tool tail trimmed)
+- Conservative de-dupe (same URL + same title only)
+NEW:
+- For CMA Decisions, set symbol to the **Decision number** (e.g., 7/CMA.4), overriding any FCCC/... symbol.
+  Detection: if title or URL contains a pattern like \d+/CMA.\d, treat as decision and set symbol to that code.
+  Also ensure type is 'CMA decision' for such rows.
 """
 import json, re
 from urllib.parse import urljoin
@@ -19,7 +21,7 @@ BASE = "https://unfccc.int"
 URL  = BASE + "/process-and-meetings/bodies/constituted-bodies/article-64-supervisory-body/rules-and-regulations"
 
 S = requests.Session()
-S.headers.update({"User-Agent": "PACM-catalogue/1.4 (+github actions)"})
+S.headers.update({"User-Agent": "PACM-catalogue/1.5 (+github actions)"})
 TIMEOUT = 60
 
 FORM_EXCLUDE_RE = re.compile(r'(A6\.4-?FORM-AC-(014|013|002))', re.I)
@@ -85,52 +87,53 @@ def clean_symbol_text(sym):
     s = s.replace("other language versions","").strip(" -–—")
     return s
 
-def normalize_titles_and_fix_sdtool(record):
+def normalize_title(record):
     t = record["title"]; u = record["url"]
-
-    # Standardize capitalization for "Decision"
+    # Standardize ", Decision"
     t = re.sub(r',\s*decision', ', Decision', t, flags=re.I)
-
-    # Baku decisions (based on URL or title text, works anywhere)
+    # Baku (2024 Add.1) → enforce short titles
     if "2024/17/Add.1" in u or re.search(r'\bBaku\b', t, flags=re.I):
         m = DECISION_CODE_RE.search(t + " " + u)
         if m and m.group(1) in {"5/CMA.6","6/CMA.6"}:
             t = f"Baku, Decision {m.group(1)}"
-
     # Glasgow 3/CMA.3
     m = re.match(r'^\s*(Glasgow),\s*Decision\s*(\d+/CMA\.\d).*$',
                  re.sub(r'\s+', ' ', t), flags=re.I)
     if m: t = f"{m.group(1)}, Decision {m.group(2)}"
-
     # Sharm el-Sheikh 7/CMA.4
     m = re.match(r'^\s*(Sharm el-Sheikh),\s*Decision\s*(\d+/CMA\.\d).*$',
                  re.sub(r'\s+', ' ', t), flags=re.I)
     if m: t = f"{m.group(1)}, Decision {m.group(2)}"
-
     # Generic "City, decision X/CMA.Y …"
     m = re.match(r'^\s*([^,]+),\s*decision\s*(\d+/CMA\.\d).*$',
                  record["title"], flags=re.I)
     if m and not any(city in t for city in ["Baku", "Glasgow", "Sharm el-Sheikh"]):
         t = f"{clean(m.group(1))}, Decision {m.group(2)}"
-
     # Remove trailing date ranges in parentheses "(1 January - 31 December 2024)" etc.
     t = re.sub(r'\s*\(\s*\d{1,2}\s+\w+\s*-\s*\d{1,2}\s+\w+\s+\d{4}\s*\)\s*$', '', t)
-
-    # Robustly trim SD tool "Accompanying forms" tails
+    # Trim SD tool "Accompanying forms" tail
     if t.lower().startswith("article 6.4 sustainable development tool"):
         t = re.sub(r'\s*\*?\s*Accompanying forms:.*$', '', t, flags=re.I).rstrip(" *—-–— ")
-
     record["title"] = t
-    record["symbol"] = clean_symbol_text(record.get("symbol",""))
     return record
 
 def fix_symbol_date_swap(record):
-    # If symbol is empty but date looks like a symbol, move it.
     sym = record.get("symbol","").strip()
     date = record.get("date","").strip()
     if (not sym) and (A64_SYMBOL_RE.search(date) or UN_DOC_RE.search(date)):
         record["symbol"] = clean_symbol_text(date)
         record["date"] = ""
+    return record
+
+def enforce_cma_decision_symbol(record):
+    """If title/URL indicates Decision X/CMA.Y, force symbol to that decision code and type to 'CMA decision'."""
+    t = record.get("title","")
+    u = record.get("url","")
+    m = DECISION_CODE_RE.search(t) or DECISION_CODE_RE.search(u)
+    if m:
+        code = m.group(1)
+        record["symbol"] = code  # override any FCCC/…
+        record["type"] = "CMA decision"
     return record
 
 def parse_current_table(table):
@@ -203,8 +206,9 @@ def parse_current_table(table):
             "title": title, "url": url, "symbol": symbol, "version": "", "date": date,
             "type": typ, "section": sec, "subsection": sub, "notes": ""
         }
-        row = normalize_titles_and_fix_sdtool(row)
+        row = normalize_title(row)
         row = fix_symbol_date_swap(row)
+        row = enforce_cma_decision_symbol(row)
         rows.append(row)
     return rows
 
@@ -247,7 +251,8 @@ def parse_cma(soup):
                 "type": "CMA decision" if "guidance" in cur_sub.lower() else "CMA report",
                 "section": sec_title, "subsection": cur_sub, "notes": ""
             }
-            item = normalize_titles_and_fix_sdtool(item)
+            item = normalize_title(item)
+            item = enforce_cma_decision_symbol(item)  # ensure symbol set to decision code if present
             items.append(item)
 
     seen=set(); out=[]
