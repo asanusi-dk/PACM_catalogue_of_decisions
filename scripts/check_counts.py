@@ -14,19 +14,19 @@ REQUIRED = {
 with open("data/a64_catalogue.json","r",encoding="utf-8") as f:
   data = json.load(f)
 
-by_sym = { (d.get("symbol") or "").strip(): d for d in data if (d.get("symbol") or "").strip() }
+by_sym = { (d.get("symbol") or "").strip(): d for d in data if (d.get("symbol") or "").strip().startswith("FCCC/PA/CMA/") }
 
 missing = [k for k in REQUIRED if k not in by_sym]
 wrong   = [k for k,v in REQUIRED.items() if (k in by_sym and by_sym[k].get("title") != v)]
 
 print(f"Total: {len(data)}")
 if missing:
-  print("\nMissing required Annual report/Addendum symbols:")
+  print("\\nMissing required Annual report/Addendum symbols (should be injected):")
   for k in missing: print(" -", k)
 else:
-  print("\nAll required Annual report/Addendum symbols are present (if published on the page).")
+  print("\\nAll required Annual report/Addendum symbols are present.")
 if wrong:
-  print("\nTitles needing normalization:")
+  print("\\nTitles needing normalization:")
   for k in wrong: print(f" - {k}: found '{by_sym[k].get('title')}', expected '{REQUIRED[k]}'")
 else:
-  print("\nAll mapped titles match the expected phrasing.")
+  print("\\nAll mapped titles match the expected phrasing.")

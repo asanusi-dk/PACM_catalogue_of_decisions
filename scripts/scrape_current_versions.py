@@ -2,13 +2,18 @@
 # -*- coding: utf-8 -*-
 """
 UNFCCC A6.4 scraper (ENG-only, Current version only; ignore Forms)
-Includes prior fixes plus:
-- For CMA **Decisions** → symbol = decision code (e.g., 7/CMA.4)
-- SD tool tail trimmed; symbol/date swap fix; conservative dedupe
-- Exclude form-instruction PDFs: A6.4-FORM-AC-014 / -013 / -002
+Includes prior fixes + robust CMA Annual Reports/Addenda injection by symbol.
+- Exclude A6.4-FORM-AC-014 / -013 / -002 instruction PDFs
+- Robust title selection; symbol inference; SD tool tail trimmed
+- Symbol/date swap fix
+- CMA decisions: symbol = decision code (e.g., 7/CMA.4); titles normalized (Baku/Glasgow/Sharm)
+- Conservative de-dupe (same URL + same title only)
 NEW:
-- Normalize **CMA Annual Reports & Addenda** titles based on their FCCC symbols (static mapping).
-  This ensures separate rows and clean titles for: 2022/6 (+Add.1), 2023/15 (+Add.1), 2024/2 (+Add.1).
+- Force‑include six CMA Annual Report/Addendum entries (static, no versioning):
+  * 2022/6, 2022/6/Add.1
+  * 2023/15, 2023/15/Add.1
+  * 2024/2,  2024/2/Add.1
+They are inserted with canonical symbol-search URLs on unfccc.int to keep them stable.
 """
 import json, re
 from urllib.parse import urljoin
@@ -19,7 +24,7 @@ BASE = "https://unfccc.int"
 URL  = BASE + "/process-and-meetings/bodies/constituted-bodies/article-64-supervisory-body/rules-and-regulations"
 
 S = requests.Session()
-S.headers.update({"User-Agent": "PACM-catalogue/1.6 (+github actions)"})
+S.headers.update({"User-Agent": "PACM-catalogue/1.7 (+github actions)"})
 TIMEOUT = 60
 
 FORM_EXCLUDE_RE = re.compile(r'(A6\.4-?FORM-AC-(014|013|002))', re.I)
@@ -29,6 +34,7 @@ A64_SYMBOL_RE    = re.compile(r'(A6\.4-[A-Z]+(?:-[A-Z]+)*-\d{3})', re.I)
 UN_DOC_RE        = re.compile(r'(FCCC/PA/CMA/\d{4}/[\w./-]+)', re.I)
 DECISION_CODE_RE = re.compile(r'(\d+/CMA\.\d)', re.I)
 
+# Static mapping for CMA Annual Reports/Addenda titles keyed by UN FCCC symbol
 ANNUAL_TITLES = {
     "FCCC/PA/CMA/2022/6":             "Annual report (reporting period 28 Jul. - 22 Sep. 2022)",
     "FCCC/PA/CMA/2022/6/Add.1":       "Addendum (reporting period 23 Sep. - 6 Nov. 2022)",
@@ -95,22 +101,26 @@ def clean_symbol_text(sym):
 
 def normalize_title_common(record):
     t = record["title"]; u = record["url"]
+    # Standardize ", Decision"
     t = re.sub(r',\s*decision', ', Decision', t, flags=re.I)
+    # Baku (2024 Add.1)
     if "2024/17/Add.1" in u or re.search(r'\bBaku\b', t, flags=re.I):
         m = DECISION_CODE_RE.search(t + " " + u)
         if m and m.group(1) in {"5/CMA.6","6/CMA.6"}:
             t = f"Baku, Decision {m.group(1)}"
-    m = re.match(r'^\s*(Glasgow),\s*Decision\s*(\d+/CMA\.\d).*$',
-                 re.sub(r'\s+', ' ', t), flags=re.I)
-    if m: t = f"{m.group(1)}, Decision {m.group(2)}"
-    m = re.match(r'^\s*(Sharm el-Sheikh),\s*Decision\s*(\d+/CMA\.\d).*$',
-                 re.sub(r'\s+', ' ', t), flags=re.I)
-    if m: t = f"{m.group(1)}, Decision {m.group(2)}"
+    # Glasgow / Sharm
+    for city in ("Glasgow","Sharm el-Sheikh"):
+        m = re.match(r'^\s*(' + re.escape(city) + r'),\s*Decision\s*(\d+/CMA\.\d).*$',
+                     re.sub(r'\s+', ' ', t), flags=re.I)
+        if m: t = f"{m.group(1)}, Decision {m.group(2)}"
+    # Generic "City, decision X/CMA.Y …"
     m = re.match(r'^\s*([^,]+),\s*decision\s*(\d+/CMA\.\d).*$',
                  record["title"], flags=re.I)
     if m and not any(city in t for city in ["Baku", "Glasgow", "Sharm el-Sheikh"]):
         t = f"{clean(m.group(1))}, Decision {m.group(2)}"
+    # Remove trailing date ranges in parentheses
     t = re.sub(r'\s*\(\s*\d{1,2}\s+\w+\s*-\s*\d{1,2}\s+\w+\s+\d{4}\s*\)\s*$', '', t)
+    # Trim SD tool "Accompanying forms" tail
     if t.lower().startswith("article 6.4 sustainable development tool"):
         t = re.sub(r'\s*\*?\s*Accompanying forms:.*$', '', t, flags=re.I).rstrip(" *—-–— ")
     record["title"] = t
@@ -135,10 +145,8 @@ def enforce_cma_decision_symbol(record):
     return record
 
 def normalize_cma_annual_reports(record):
-    if "CMA related decisions and documents" not in (record.get("section") or ""):
-        return record
+    """If symbol/url/title reveals a known FCCC Annual report, overwrite title/type accordingly."""
     sym = (record.get("symbol") or "").strip()
-    # derive FCCC symbol from symbol or URL or title
     m = UN_DOC_RE.search(sym) or UN_DOC_RE.search(record.get("url","")) or UN_DOC_RE.search(record.get("title",""))
     key = m.group(1) if m else sym
     if key in ANNUAL_TITLES:
@@ -241,6 +249,7 @@ def parse_cma(soup):
                 continue
             url = urljoin(BASE, href)
 
+            # Baku Add.1 split
             if "guidance" in cur_sub.lower() and ("2024/17/Add.1" in url or "2024/17/Add.1" in txt):
                 for code in ("5/CMA.6","6/CMA.6"):
                     items.append({
@@ -266,12 +275,44 @@ def parse_cma(soup):
             item = normalize_cma_annual_reports(item)
             items.append(item)
 
+    # Dedupe only if both URL and title match
     seen=set(); out=[]
     for r in items:
         k=(r["url"], r["title"])
         if k in seen: continue
         seen.add(k); out.append(r)
     return out
+
+def ensure_static_cma_reports(records):
+    """Guarantee the six Annual report/Addendum rows exist with stable URLs and titles."""
+    # Build a set of existing keys (prefer symbol if present; else fall back to URL query param symbol)
+    existing_symbols = set()
+    for r in records:
+        sym = (r.get("symbol") or "").strip()
+        if sym.startswith("FCCC/PA/CMA/"):
+            existing_symbols.add(sym)
+        else:
+            # try to parse symbol from URL
+            m = re.search(r'(FCCC/PA/CMA/\d{4}/[\w./-]+)', r.get("url",""))
+            if m: existing_symbols.add(m.group(1))
+
+    for sym, title in ANNUAL_TITLES.items():
+        if sym in existing_symbols:
+            continue
+        # canonical unfccc symbol search URL
+        url = f"{BASE}/documents?symbol={sym}"
+        records.append({
+            "title": title,
+            "url": url,
+            "symbol": sym,
+            "version": "",
+            "date": "",
+            "type": "CMA report",
+            "section": "CMA related decisions and documents",
+            "subsection": "Annual reports of the SBM to the CMA",
+            "notes": ""
+        })
+    return records
 
 def main():
     soup = BeautifulSoup(fetch(URL), "lxml")
@@ -283,11 +324,15 @@ def main():
         if "cma related decisions and documents" in sec.lower(): continue
         recs += parse_current_table(tb)
 
+    # Dedupe conservatively (same URL + same title)
     seen=set(); out=[]
     for r in recs:
         k=(r["url"], r["title"])
         if k in seen: continue
         seen.add(k); out.append(r)
+
+    # Ensure static CMA Annual Reports/Addenda are present
+    out = ensure_static_cma_reports(out)
 
     out.sort(key=lambda x: (x.get("section",""), x.get("subsection",""), x.get("symbol",""), x.get("title","")))
 
