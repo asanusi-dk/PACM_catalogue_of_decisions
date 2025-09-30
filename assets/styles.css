@@ -1,0 +1,8 @@
+/* assets/styles.css — grouping styles */
+.group-row td{background:#f0f6ff;color:#003366;font-weight:700;padding:10px 12px;border-top:1px solid #e3eefc;border-bottom:1px solid #e3eefc}
+.subgroup-row td{background:#f7f9fc;color:#2b4c7e;font-weight:600;padding:8px 12px;border-bottom:1px solid #eef3fa}
+.doc-row td{padding:8px 12px;border-bottom:1px solid #f0f2f5}
+.cell-title a{color:#0a6ed1;text-decoration:none}
+.cell-title a:hover{text-decoration:underline}
+.cell-symbol{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace;white-space:nowrap}
+.error{color:#b00020}
