@@ -4,7 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Paris Agreement Crediting Mechanism Catalogue of Documents</title>
+
+  <!-- Your base styles -->
   <link rel="stylesheet" href="assets/style.css?v=8">
+  <!-- Grouped-table styles (new) -->
+  <link rel="stylesheet" href="assets/styles.css?v=grp3">
 </head>
 <body>
   <header class="appbar">
@@ -21,7 +25,7 @@
       <input id="q" type="search" placeholder='Search… tip: use quotes for exact phrases, e.g. "reversal buffer"'>
       <label class="toggle">
         <input id="fulltextToggle" type="checkbox">
-        <span>Full‑text</span>
+        <span>Full-text</span>
       </label>
       <div class="view-toggle" role="tablist" aria-label="Result view">
         <label class="tab"><input type="radio" name="view" value="docs" checked> Documents</label>
@@ -29,25 +33,21 @@
       </div>
       <button id="reset" class="ghost">Reset</button>
     </div>
-    <div id="status" class="status warn" role="status" aria-live="polite">Loading…</div>
+
+    <!-- Status banner (id changed so JS can control it) -->
+    <div id="doc-status" class="status warn" role="status" aria-live="polite">Loading…</div>
   </header>
-  
-<link rel="stylesheet" href="assets/styles.css?v=grp1">
 
-<table class="doc-table" style="width:100%; border-collapse:collapse">
-  <thead>
-    <tr>
-      <th style="text-align:left; padding:8px 12px">Title</th>
-      <th style="text-align:left; padding:8px 12px; white-space:nowrap">Symbol</th>
-      <th style="text-align:left; padding:8px 12px">Version</th>
-      <th style="text-align:left; padding:8px 12px">Entry into force / Date</th>
-    </tr>
-  </thead>
-  <tbody id="doc-tbody"></tbody>
-</table>
-
-<script src="assets/app.js?v=grp1"></script>
   <main>
+    <!-- Catalogue table START -->
+    <table id="doc-table" class="doc-table" style="width:100%; border-collapse:collapse">
+      <!-- Headers are injected by assets/app.js (v=grp3) based on its HEADERS array -->
+      <thead></thead>
+      <tbody id="doc-tbody"></tbody>
+    </table>
+    <!-- Catalogue table END -->
+
+    <!-- Existing panels kept for the Full-text / Matches view -->
     <div id="count" class="count"></div>
     <div id="list"></div>
     <div id="hitsHeader" class="count hidden"></div>
@@ -58,8 +58,29 @@
     <p>Source: UNFCCC A6.4 Supervisory Body – Rules & Regulations. Links point to official PDFs.</p>
   </footer>
 
-  <!-- Load fulltext BEFORE app, with cache busters -->
+  <!-- Scripts -->
+  <!-- Full-text logic (unchanged) -->
   <script src="assets/fulltext.js?v=8"></script>
-  <script src="assets/app.js?v=8"></script>
-</body>
-</html>
+
+  <!-- Tiny helper to toggle between Documents table and Matches list -->
+  <script>
+  (function(){
+    const docsTable = document.getElementById('doc-table');
+    const hitsPanel = document.getElementById('hits');
+    const hitsHeader = document.getElementById('hitsHeader');
+    const radios = document.querySelectorAll('input[name="view"]');
+
+    function pick(v){
+      const showDocs = v === 'docs';
+      if (docsTable) docsTable.style.display = showDocs ? '' : 'none';
+      if (hitsPanel) hitsPanel.classList.toggle('hidden', showDocs);
+      if (hitsHeader) hitsHeader.classList.toggle('hidden', showDocs);
+    }
+    radios.forEach(r => r.addEventListener('change', e => pick(e.target.value)));
+    const current = document.querySelector('input[name="view"]:checked');
+    pick(current ? current.value : 'docs');
+  })();
+  </script>
+
+  <!-- Group
+
