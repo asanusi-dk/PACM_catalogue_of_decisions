@@ -4,8 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Paris Agreement Crediting Mechanism Catalogue of Documents</title>
+
+  <!-- Base site styles (your existing file) -->
   <link rel="stylesheet" href="assets/style.css?v=8">
-  <link rel="stylesheet" href="assets/styles.css?v=pkg1">
+  <!-- Grouped-table styles (new) -->
+  <link rel="stylesheet" href="assets/styles.css?v=pkg2">
 </head>
 <body>
   <header class="appbar">
@@ -31,15 +34,20 @@
       <button id="reset" class="ghost">Reset</button>
     </div>
 
+    <!-- Status banner controlled by assets/app.js -->
     <div id="doc-status" class="status warn" role="status" aria-live="polite">Loading…</div>
   </header>
 
   <main>
+    <!-- Catalogue table START -->
     <table id="doc-table" class="doc-table" style="width:100%; border-collapse:collapse">
+      <!-- Headers are injected by assets/app.js based on its HEADERS array -->
       <thead></thead>
       <tbody id="doc-tbody"></tbody>
     </table>
+    <!-- Catalogue table END -->
 
+    <!-- Existing panels for the Matches view (full-text) -->
     <div id="count" class="count"></div>
     <div id="list"></div>
     <div id="hitsHeader" class="count hidden"></div>
@@ -50,8 +58,11 @@
     <p>Source: UNFCCC A6.4 Supervisory Body – Rules & Regulations. Links point to official PDFs.</p>
   </footer>
 
+  <!-- Scripts -->
+  <!-- Your existing full-text logic; keep this if you use the Matches view -->
   <script src="assets/fulltext.js?v=8"></script>
 
+  <!-- Toggle between Documents (table) and Matches (full-text hits) -->
   <script>
   (function(){
     const docsTable = document.getElementById('doc-table');
@@ -71,6 +82,7 @@
     const current = document.querySelector('input[name="view"]:checked');
     pick(current ? current.value : 'docs');
 
+    // Reset = clear search + go back to Docs
     if (resetBtn){
       resetBtn.addEventListener('click', () => {
         if(q){ q.value = ''; q.dispatchEvent(new Event('input')); }
@@ -81,6 +93,7 @@
   })();
   </script>
 
-  <script src="assets/app.js?v=pkg1"></script>
+  <!-- Grouped-table renderer (new). ONLY this app.js should be included. -->
+  <script src="assets/app.js?v=pkg2"></script>
 </body>
 </html>
