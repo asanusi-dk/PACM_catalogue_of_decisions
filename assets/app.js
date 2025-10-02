@@ -1,21 +1,19 @@
-/* assets/app.js — grouped table (Section → Subsection), dynamic headers, symbol de-dupe */
 (function(){
   const CATALOG_URL = 'data/a64_catalogue.json';
-  const HEADERS = [
-    'Document',
-    'Symbol',
-    'Version',
-    'Entry into force / Date'
-  ];
+  const HEADERS = ['Document', 'Symbol', 'Version', 'Entry into force / Date'];
 
-  const statusEl = document.getElementById('loading') || document.getElementById('doc-status');
-  const table = document.getElementById('doc-table') || document.querySelector('table.doc-table');
-  const thead = (table && table.querySelector('thead')) || null;
+  const statusEl = document.getElementById('doc-status');
+  const table = document.getElementById('doc-table');
+  const thead = table && table.querySelector('thead');
   const tbody = (table && table.querySelector('tbody#doc-tbody')) || document.getElementById('doc-tbody');
   const searchBox = document.getElementById('q');
 
-  function setStatus(msg){ if(statusEl){ statusEl.textContent = msg || ''; statusEl.style.display = msg ? '' : 'none'; } }
-  function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+  function setStatus(msg){
+    if(!statusEl) return;
+    if(!msg){ statusEl.textContent=''; statusEl.style.display='none'; }
+    else { statusEl.textContent = msg; statusEl.style.display=''; }
+  }
+  function esc(s){ return (s||'').replace(/[&<>\"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\\'':'&#39;' }[m])); }
 
   function normalizeSymbol(sym){
     if(!sym) return '';
@@ -66,9 +64,7 @@
 
   function ensureHeaders(){
     if(!thead || !table) return;
-    thead.innerHTML = `<tr>${
-      HEADERS.map(h => `<th>${esc(h)}</th>`).join('')
-    }</tr>`;
+    thead.innerHTML = `<tr>${HEADERS.map(h => `<th>${esc(h)}</th>`).join('')}</tr>`;
   }
 
   function render(){
@@ -94,7 +90,6 @@
                           (a.title||'').localeCompare(b.title||''));
 
         const grouped = groupData(rows);
-
         ensureHeaders();
         const parts = [];
         const colCount = HEADERS.length;
@@ -113,7 +108,7 @@
             }
           }
         }
-        tbody.innerHTML = parts.join('\n');
+        tbody.innerHTML = parts.join('\\n');
         setStatus('');
       })
       .catch(err => {
