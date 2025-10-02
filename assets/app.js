@@ -1,5 +1,8 @@
+\
+/* assets/app.js — grouped table (Section → Subsection), dynamic headers, symbol de-dupe */
 (function(){
   const CATALOG_URL = 'data/a64_catalogue.json';
+  // Edit these labels to match your spreadsheet exactly:
   const HEADERS = ['Document', 'Symbol', 'Version', 'Entry into force / Date'];
 
   const statusEl = document.getElementById('doc-status');
@@ -13,7 +16,7 @@
     if(!msg){ statusEl.textContent=''; statusEl.style.display='none'; }
     else { statusEl.textContent = msg; statusEl.style.display=''; }
   }
-  function esc(s){ return (s||'').replace(/[&<>\"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\\'':'&#39;' }[m])); }
+  function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
 
   function normalizeSymbol(sym){
     if(!sym) return '';
@@ -91,6 +94,7 @@
 
         const grouped = groupData(rows);
         ensureHeaders();
+
         const parts = [];
         const colCount = HEADERS.length;
 
