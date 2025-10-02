@@ -4,11 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Paris Agreement Crediting Mechanism Catalogue of Documents</title>
-
-  <!-- Your base styles -->
   <link rel="stylesheet" href="assets/style.css?v=8">
-  <!-- Grouped-table styles (new) -->
-  <link rel="stylesheet" href="assets/styles.css?v=grp3">
+  <link rel="stylesheet" href="assets/styles.css?v=pkg1">
 </head>
 <body>
   <header class="appbar">
@@ -34,20 +31,15 @@
       <button id="reset" class="ghost">Reset</button>
     </div>
 
-    <!-- Status banner (id changed so JS can control it) -->
     <div id="doc-status" class="status warn" role="status" aria-live="polite">Loading…</div>
   </header>
 
   <main>
-    <!-- Catalogue table START -->
     <table id="doc-table" class="doc-table" style="width:100%; border-collapse:collapse">
-      <!-- Headers are injected by assets/app.js (v=grp3) based on its HEADERS array -->
       <thead></thead>
       <tbody id="doc-tbody"></tbody>
     </table>
-    <!-- Catalogue table END -->
 
-    <!-- Existing panels kept for the Full-text / Matches view -->
     <div id="count" class="count"></div>
     <div id="list"></div>
     <div id="hitsHeader" class="count hidden"></div>
@@ -58,17 +50,16 @@
     <p>Source: UNFCCC A6.4 Supervisory Body – Rules & Regulations. Links point to official PDFs.</p>
   </footer>
 
-  <!-- Scripts -->
-  <!-- Full-text logic (unchanged) -->
   <script src="assets/fulltext.js?v=8"></script>
 
-  <!-- Tiny helper to toggle between Documents table and Matches list -->
   <script>
   (function(){
     const docsTable = document.getElementById('doc-table');
     const hitsPanel = document.getElementById('hits');
     const hitsHeader = document.getElementById('hitsHeader');
     const radios = document.querySelectorAll('input[name="view"]');
+    const resetBtn = document.getElementById('reset');
+    const q = document.getElementById('q');
 
     function pick(v){
       const showDocs = v === 'docs';
@@ -79,8 +70,17 @@
     radios.forEach(r => r.addEventListener('change', e => pick(e.target.value)));
     const current = document.querySelector('input[name="view"]:checked');
     pick(current ? current.value : 'docs');
+
+    if (resetBtn){
+      resetBtn.addEventListener('click', () => {
+        if(q){ q.value = ''; q.dispatchEvent(new Event('input')); }
+        const docsTab = document.querySelector('input[name="view"][value="docs"]');
+        if (docsTab){ docsTab.checked = true; docsTab.dispatchEvent(new Event('change')); }
+      });
+    }
   })();
   </script>
 
-  <!-- Group
-
+  <script src="assets/app.js?v=pkg1"></script>
+</body>
+</html>
