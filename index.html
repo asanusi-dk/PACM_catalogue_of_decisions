@@ -5,10 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Paris Agreement Crediting Mechanism Catalogue of Documents</title>
 
-  <!-- Base site styles (your existing file) -->
-  <link rel="stylesheet" href="assets/style.css?v=8">
-  <!-- Grouped-table styles (new) -->
-  <link rel="stylesheet" href="assets/styles.css?v=pkg2">
+  <!-- Base styles: safe placeholder -->
+  <link rel="stylesheet" href="assets/style.css?v=rescue">
+
+  <!-- Inline grouped-table styles (so paths can't break) -->
+  <style>
+    .group-row td{
+      background:#f0f6ff; color:#003366; font-weight:700;
+      padding:10px 12px; border-top:1px solid #e3eefc; border-bottom:1px solid #e3eefc;
+    }
+    .subgroup-row td{
+      background:#f7f9fc; color:#2b4c7e; font-weight:600;
+      padding:8px 12px; border-bottom:1px solid #eef3fa;
+    }
+    .doc-row td{ padding:8px 12px; border-bottom:1px solid #f0f2f5; }
+    .cell-title a{ color:#0a6ed1; text-decoration:none; }
+    .cell-title a:hover{ text-decoration:underline; }
+    .cell-symbol{
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+      white-space:nowrap;
+    }
+    .status.warn{ color:#2b4c7e; padding:8px 0; }
+    .error{ color:#b00020; }
+    .hidden{ display:none; }
+    /* Simple table baseline */
+    table.doc-table{ width:100%; border-collapse:collapse; }
+    thead th{ text-align:left; padding:8px 12px; border-bottom:2px solid #e5eef9; }
+  </style>
 </head>
 <body>
   <header class="appbar">
@@ -34,20 +57,20 @@
       <button id="reset" class="ghost">Reset</button>
     </div>
 
-    <!-- Status banner controlled by assets/app.js -->
+    <!-- Status banner controlled by the inline renderer -->
     <div id="doc-status" class="status warn" role="status" aria-live="polite">Loading…</div>
   </header>
 
   <main>
     <!-- Catalogue table START -->
-    <table id="doc-table" class="doc-table" style="width:100%; border-collapse:collapse">
-      <!-- Headers are injected by assets/app.js based on its HEADERS array -->
+    <table id="doc-table" class="doc-table">
+      <!-- Headers are injected by JS below -->
       <thead></thead>
       <tbody id="doc-tbody"></tbody>
     </table>
     <!-- Catalogue table END -->
 
-    <!-- Existing panels for the Matches view (full-text) -->
+    <!-- Panels for Matches (stubbed; safe to leave empty) -->
     <div id="count" class="count"></div>
     <div id="list"></div>
     <div id="hitsHeader" class="count hidden"></div>
@@ -58,11 +81,10 @@
     <p>Source: UNFCCC A6.4 Supervisory Body – Rules & Regulations. Links point to official PDFs.</p>
   </footer>
 
-  <!-- Scripts -->
-  <!-- Your existing full-text logic; keep this if you use the Matches view -->
-  <script src="assets/fulltext.js?v=8"></script>
+  <!-- No-op full-text stub (safe even if you replace later with your real script) -->
+  <script src="assets/fulltext.js?v=rescue"></script>
 
-  <!-- Toggle between Documents (table) and Matches (full-text hits) -->
+  <!-- Toggle between Documents table and Matches list -->
   <script>
   (function(){
     const docsTable = document.getElementById('doc-table');
@@ -82,7 +104,6 @@
     const current = document.querySelector('input[name="view"]:checked');
     pick(current ? current.value : 'docs');
 
-    // Reset = clear search + go back to Docs
     if (resetBtn){
       resetBtn.addEventListener('click', () => {
         if(q){ q.value = ''; q.dispatchEvent(new Event('input')); }
@@ -93,7 +114,123 @@
   })();
   </script>
 
-  <!-- Grouped-table renderer (new). ONLY this app.js should be included. -->
-  <script src="assets/app.js?v=pkg2"></script>
+  <!-- Grouped-table renderer (inline; only depends on data/a64_catalogue.json) -->
+  <script>
+  (function(){
+    const CATALOG_URL = 'data/a64_catalogue.json';
+    // Edit these to match your spreadsheet labels if needed:
+    const HEADERS = ['Document', 'Symbol', 'Version', 'Entry into force / Date'];
+
+    const statusEl = document.getElementById('doc-status');
+    const table = document.getElementById('doc-table');
+    const thead = table && table.querySelector('thead');
+    const tbody = (table && table.querySelector('tbody#doc-tbody')) || document.getElementById('doc-tbody');
+    const searchBox = document.getElementById('q');
+
+    function setStatus(msg){
+      if(!statusEl) return;
+      if(!msg){ statusEl.textContent=''; statusEl.style.display='none'; }
+      else { statusEl.textContent = msg; statusEl.style.display=''; }
+    }
+    function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+    function normalizeSymbol(sym){
+      if(!sym) return '';
+      let s = String(sym).trim();
+      const mCMA = s.match(/(\d+\/CMA\.\d)/i);
+      const mA64 = s.match(/(A6\.4-[A-Z]+(?:-[A-Z]+)*-\d{3})/i);
+      const mUN  = s.match(/(FCCC\/PA\/CMA\/\d{4}\/[\w./-]+)/i);
+      if(mCMA) return mCMA[1];
+      if(mA64) return mA64[1];
+      if(mUN)  return mUN[1];
+      return s;
+    }
+    function dedupeBySymbol(rows){
+      const seen = new Map(); const out = [];
+      const score = (x)=>['date','version','type','section','subsection'].reduce((n,k)=>n+(x[k] && String(x[k]).trim() ? 1:0),0);
+      for(const r of rows){
+        const key = normalizeSymbol(r.symbol) || (r.url||'').replace(/#.*$/,'');
+        if(!key){ out.push(r); continue; }
+        if(seen.has(key)){
+          const prev = seen.get(key);
+          if(score(r) > score(prev)){
+            const idx = out.indexOf(prev); if(idx>=0) out[idx] = r;
+            seen.set(key, r);
+          }
+        } else { seen.set(key, r); out.push(r); }
+      }
+      return out;
+    }
+    function groupData(rows){
+      const bySection = new Map();
+      for(const r of rows){
+        const sec = r.section || 'Other';
+        const sub = r.subsection || '';
+        if(!bySection.has(sec)) bySection.set(sec, new Map());
+        const inner = bySection.get(sec);
+        if(!inner.has(sub)) inner.set(sub, []);
+        inner.get(sub).push(r);
+      }
+      return bySection;
+    }
+    function ensureHeaders(){
+      if(!thead || !table) return;
+      thead.innerHTML = `<tr>${HEADERS.map(h => `<th>${esc(h)}</th>`).join('')}</tr>`;
+    }
+
+    function render(){
+      if(!tbody){ setStatus('Table body is missing (#doc-tbody).'); return; }
+      setStatus('Loading…');
+      fetch(CATALOG_URL, { cache: 'no-cache' })
+        .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .then(data => {
+          let rows = data.map(d => ({
+            title: d.title, url: d.url, symbol: d.symbol,
+            version: d.version || '', date: d.date || '',
+            type: d.type || '', section: d.section || '', subsection: d.subsection || ''
+          }));
+          rows = dedupeBySymbol(rows);
+
+          const q = (searchBox && searchBox.value || '').trim().toLowerCase();
+          if(q){ rows = rows.filter(r => (r.title||'').toLowerCase().includes(q) || (r.symbol||'').toLowerCase().includes(q)); }
+
+          rows.sort((a,b)=> (a.section||'').localeCompare(b.section||'') ||
+                            (a.subsection||'').localeCompare(b.subsection||'') ||
+                            (a.title||'').localeCompare(b.title||''));
+
+          const grouped = groupData(rows);
+          ensureHeaders();
+
+          const parts = [];
+          const colCount = HEADERS.length;
+
+          for(const [sec, subMap] of grouped){
+            parts.push(`<tr class="group-row"><td colspan="${colCount}">${esc(sec)}</td></tr>`);
+            for(const [sub, items] of subMap){
+              if(sub){ parts.push(`<tr class="subgroup-row"><td colspan="${colCount}">${esc(sub)}</td></tr>`); }
+              for(const r of items){
+                parts.push(`<tr class="doc-row">
+                  <td class="cell-title"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></td>
+                  <td class="cell-symbol">${esc(normalizeSymbol(r.symbol))}</td>
+                  <td class="cell-version">${esc(r.version || '')}</td>
+                  <td class="cell-date">${esc(r.date || '')}</td>
+                </tr>`);
+              }
+            }
+          }
+          tbody.innerHTML = parts.join('\n');
+          setStatus('');
+        })
+        .catch(err => {
+          console.error('[PACM] render failed:', err);
+          setStatus('Failed to load catalogue.');
+          if(tbody) tbody.innerHTML = `<tr><td colspan="${HEADERS.length}" class="error">Could not fetch data/a64_catalogue.json</td></tr>`;
+        });
+    }
+
+    if(searchBox){ searchBox.addEventListener('input', render); }
+    document.addEventListener('DOMContentLoaded', render);
+    window.PACM_renderTable = render;
+  })();
+  </script>
 </body>
 </html>
