@@ -1,5 +1,9 @@
 \
-/* assets/fulltext.js — robust full‑text search for PACM (auto-switch, multi-source index, JSON+JSONL) */
+/* assets/fulltext.js — robust full‑text with diagnostics
+   - Shows a status line telling you which index file was loaded (or why not)
+   - Tries multiple filenames/paths and supports JSON + JSONL
+   - Auto-switches to Matches when results exist
+*/
 (function(){
   const SOURCES = [
     'search_index.json','./search_index.json','data/search_index.json',
@@ -15,7 +19,20 @@
   const resetBtn = document.getElementById('reset');
   const fulltextToggle = document.getElementById('fulltextToggle');
 
-  let INDEX = [], indexLoaded = false, tried = [];
+  // Inject a small status line under the controls if not present
+  let diag = document.getElementById('fulltext-status');
+  if(!diag){
+    diag = document.createElement('div');
+    diag.id = 'fulltext-status';
+    diag.style.fontSize = '12px';
+    diag.style.margin = '6px 20px';
+    diag.style.color = '#2b4c7e';
+    const header = document.querySelector('.controls') || document.body;
+    header.parentNode.insertBefore(diag, header.nextSibling);
+  }
+  function setDiag(msg){ if(diag){ diag.textContent = msg || ''; } }
+
+  let INDEX = [], indexLoaded = false, tried = [], loadedFrom = null;
 
   function switchView(name){ const r=document.querySelector(`input[name="view"][value="${name}"]`); if(r){ r.checked=true; r.dispatchEvent(new Event('change')); } }
   function setHeader(text){ if(!hitsHeaderEl) return; if(!text){ hitsHeaderEl.classList.add('hidden'); hitsHeaderEl.textContent=''; } else { hitsHeaderEl.classList.remove('hidden'); hitsHeaderEl.textContent=text; } }
@@ -28,20 +45,31 @@
   async function fetchMaybeJsonl(src){
     const res = await fetch(src,{cache:'no-cache'}); if(!res.ok) throw new Error('HTTP '+res.status);
     const ct=(res.headers.get('content-type')||'').toLowerCase(); const txt=await res.text();
-    const isJsonl = src.endsWith('.jsonl') || (!ct.includes('json') && /^\s*{/.test(txt) && txt.split('\n').length>1);
-    if(isJsonl){ return txt.split('\n').map(s=>s.trim()).filter(Boolean).map(l=>{try{return JSON.parse(l);}catch(_){return null;}}).filter(Boolean); }
+    const isJsonl = src.endsWith('.jsonl') || (!ct.includes('json') && /^\s*{/.test(txt) && txt.split('\\n').length>1);
+    if(isJsonl){ return txt.split('\\n').map(s=>s.trim()).filter(Boolean).map(l=>{try{return JSON.parse(l);}catch(_){return null;}}).filter(Boolean); }
     return JSON.parse(txt);
   }
   async function fetchIndex(){
     if(indexLoaded) return INDEX;
     for(const src of SOURCES){
-      try{ tried.push(src); const raw = await fetchMaybeJsonl(src);
+      try{
+        tried.push(src);
+        const raw = await fetchMaybeJsonl(src);
         let arr = Array.isArray(raw) ? raw : (raw.records || raw.docs || raw.items || []);
-        if(!Array.isArray(arr)) arr = []; INDEX = arr.map(normalizeRecord).filter(x=>x.url && x.text);
-        if(INDEX.length){ indexLoaded=true; return INDEX; }
-      }catch(e){ /* try next */ }
+        if(!Array.isArray(arr)) arr = [];
+        const norm = arr.map(normalizeRecord).filter(x=>x.url && x.text);
+        if(norm.length){
+          INDEX = norm; indexLoaded = true; loadedFrom = src;
+          setDiag(`Full‑text index loaded from “${src}” · ${INDEX.length} records`);
+          return INDEX;
+        }
+      }catch(e){
+        // continue
+      }
     }
-    indexLoaded=true; INDEX=[]; return INDEX;
+    indexLoaded = true; INDEX = []; loadedFrom = null;
+    setDiag(`No full‑text index found. Looked for: ${SOURCES.join(', ')}`);
+    return INDEX;
   }
 
   function isQuoted(q){ return q.startsWith('"') && q.endsWith('"') && q.length>2; }
@@ -64,7 +92,10 @@
   function toPdfUrl(url,q){ try{ if(!/\\.pdf(?:$|[?#])/.test(url)) return url; const u=new URL(url,location.href); const frag=u.hash?u.hash.replace(/^#/,'')+'&':''; u.hash='#'+frag+'search='+encodeURIComponent(q.replace(/^"|"$/g,'')); return u.toString(); }catch(e){ return url+(url.includes('#')?'&':'#')+'search='+encodeURIComponent(q.replace(/^"|"$/g,'')); } }
   function renderHits(records,q){
     if(!hitsEl) return;
-    if(!records.length){ hitsEl.innerHTML=`<p class="error">No matches. ${indexLoaded && !INDEX.length ? '(No full‑text index found. Tried: '+tried.join(', ')+')' : ''}</p>`; setHeader('No matches'); return; }
+    if(!records.length){
+      const why = indexLoaded && !INDEX.length ? ` <em>(No full‑text index available. See the blue status line above for filenames.)</em>` : '';
+      hitsEl.innerHTML=`<p class="error">No matches.${why}</p>`; setHeader('No matches'); return;
+    }
     const hits=records.slice(0,HITS_LIMIT); const parts=[];
     for(const r of hits){
       const url=toPdfUrl(r.url,q), title=escapeHtml(r.title||'(untitled)'), symbol=escapeHtml(r.symbol||'');
@@ -82,5 +113,6 @@
   if(radios){ radios.forEach(r=>r.addEventListener('change', e=>{ if(e.target.value==='hits'){ runSearch(false); } })); }
   if(resetBtn){ resetBtn.addEventListener('click', ()=>{ clearHits(); if(qEl){ qEl.value=''; } if(fulltextToggle) fulltextToggle.checked=false; switchView('docs'); }); }
 
+  // Expose for quick debugging in console
   window.PACM_fulltext = { runSearch, fetchIndex };
-})();
+})();\
