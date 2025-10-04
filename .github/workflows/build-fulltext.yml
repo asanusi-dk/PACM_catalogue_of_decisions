@@ -1,7 +1,12 @@
-name: Build Full-text Index
+name: Build Full-text Index (with OCR)
 
 on:
   workflow_dispatch:
+    inputs:
+      ocr_lang:
+        description: 'OCR language (Tesseract code, e.g., eng, fra, spa)'
+        required: false
+        default: 'eng'
   push:
     paths:
       - 'data/a64_catalogue.json'
@@ -15,12 +20,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install pdftotext (poppler-utils)
+      - name: Install dependencies (pdftotext + OCR)
         run: |
           sudo apt-get update
-          sudo apt-get install -y poppler-utils
+          sudo apt-get install -y poppler-utils ocrmypdf tesseract-ocr qpdf ghostscript pngquant
 
       - name: Build full-text index
+        env:
+          PACM_OCR_LANG: ${{ inputs.ocr_lang }}
         run: |
           python3 scripts/build_fulltext.py
 
@@ -28,5 +35,5 @@ jobs:
         uses: EndBug/add-and-commit@v9
         with:
           add: "data/search_index.json"
-          message: "chore: update full-text index"
+          message: "chore: update full-text index (OCR)"
           default_author: github_actions
