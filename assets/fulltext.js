@@ -1,15 +1,7 @@
 \
-/* assets/fulltext.js — robust full‑text with diagnostics
-   - Shows a status line telling you which index file was loaded (or why not)
-   - Tries multiple filenames/paths and supports JSON + JSONL
-   - Auto-switches to Matches when results exist
-*/
+/* assets/fulltext.js — strict full‑text loader (expects data/search_index.json) */
 (function(){
-  const SOURCES = [
-    'search_index.json','./search_index.json','data/search_index.json',
-    'data/fulltext.json','data/index.json','data/a64_fulltext.json','data/fulltext_index.json',
-    'fulltext.json','index.json','data/a64_fulltext.jsonl','fulltext.jsonl'
-  ];
+  const INDEX_PATH = 'data/search_index.json';
   const HITS_LIMIT = 400, CONTEXT = 90, MAX_SNIPPET = 240;
 
   const qEl = document.getElementById('q');
@@ -19,7 +11,7 @@
   const resetBtn = document.getElementById('reset');
   const fulltextToggle = document.getElementById('fulltextToggle');
 
-  // Inject a small status line under the controls if not present
+  // status line under controls
   let diag = document.getElementById('fulltext-status');
   if(!diag){
     diag = document.createElement('div');
@@ -27,12 +19,12 @@
     diag.style.fontSize = '12px';
     diag.style.margin = '6px 20px';
     diag.style.color = '#2b4c7e';
-    const header = document.querySelector('.controls') || document.body;
-    header.parentNode.insertBefore(diag, header.nextSibling);
+    const controls = document.querySelector('.controls') || document.body;
+    controls.parentNode.insertBefore(diag, controls.nextSibling);
   }
   function setDiag(msg){ if(diag){ diag.textContent = msg || ''; } }
 
-  let INDEX = [], indexLoaded = false, tried = [], loadedFrom = null;
+  let INDEX = [], indexLoaded = false;
 
   function switchView(name){ const r=document.querySelector(`input[name="view"][value="${name}"]`); if(r){ r.checked=true; r.dispatchEvent(new Event('change')); } }
   function setHeader(text){ if(!hitsHeaderEl) return; if(!text){ hitsHeaderEl.classList.add('hidden'); hitsHeaderEl.textContent=''; } else { hitsHeaderEl.classList.remove('hidden'); hitsHeaderEl.textContent=text; } }
@@ -42,38 +34,27 @@
   function pick(o, ks){ for(const k of ks){ if(o && o[k]!=null) return o[k]; } return ''; }
   function normalizeRecord(r){ return { url:pick(r,['url','link','u','href','location']), title:pick(r,['title','doc_title','ti','name']), symbol:pick(r,['symbol','sy','doc_symbol']), section:pick(r,['section','sec']), subsection:pick(r,['subsection','sub']), text:normalizeText(pick(r,['text','content','body','c','txt','doc_text','text_content'])) }; }
 
-  async function fetchMaybeJsonl(src){
-    const res = await fetch(src,{cache:'no-cache'}); if(!res.ok) throw new Error('HTTP '+res.status);
-    const ct=(res.headers.get('content-type')||'').toLowerCase(); const txt=await res.text();
-    const isJsonl = src.endsWith('.jsonl') || (!ct.includes('json') && /^\s*{/.test(txt) && txt.split('\\n').length>1);
-    if(isJsonl){ return txt.split('\\n').map(s=>s.trim()).filter(Boolean).map(l=>{try{return JSON.parse(l);}catch(_){return null;}}).filter(Boolean); }
-    return JSON.parse(txt);
-  }
-  async function fetchIndex(){
+  async function loadIndex(){
     if(indexLoaded) return INDEX;
-    for(const src of SOURCES){
-      try{
-        tried.push(src);
-        const raw = await fetchMaybeJsonl(src);
-        let arr = Array.isArray(raw) ? raw : (raw.records || raw.docs || raw.items || []);
-        if(!Array.isArray(arr)) arr = [];
-        const norm = arr.map(normalizeRecord).filter(x=>x.url && x.text);
-        if(norm.length){
-          INDEX = norm; indexLoaded = true; loadedFrom = src;
-          setDiag(`Full‑text index loaded from “${src}” · ${INDEX.length} records`);
-          return INDEX;
-        }
-      }catch(e){
-        // continue
-      }
+    try{
+      const res = await fetch(INDEX_PATH, {cache:'no-cache'});
+      if(!res.ok) throw new Error('HTTP '+res.status+' for '+INDEX_PATH);
+      const json = await res.json();
+      let arr = Array.isArray(json) ? json : (json.records || json.docs || json.items || []);
+      if(!Array.isArray(arr)) arr = [];
+      INDEX = arr.map(normalizeRecord).filter(x => x.url && x.text);
+      indexLoaded = true;
+      setDiag(`Full‑text index loaded from “${INDEX_PATH}” · ${INDEX.length} records`);
+      return INDEX;
+    }catch(e){
+      indexLoaded = true; INDEX = [];
+      setDiag(`Full‑text index missing at “${INDEX_PATH}”. Create this file (array of records with url/title/text).`);
+      return INDEX;
     }
-    indexLoaded = true; INDEX = []; loadedFrom = null;
-    setDiag(`No full‑text index found. Looked for: ${SOURCES.join(', ')}`);
-    return INDEX;
   }
 
   function isQuoted(q){ return q.startsWith('"') && q.endsWith('"') && q.length>2; }
-  function tokenize(q){ const parts=q.trim().match(/"[^"]+"|\\S+/g)||[]; return parts.map(p=>p.replace(/^"|"$/g,'')); }
+  function tokenize(q){ const parts=q.trim().match(/"[^"]+"|\S+/g)||[]; return parts.map(p=>p.replace(/^"|"$/g,'')); }
   function filterRecords(records, query){
     if(!query) return [];
     if(isQuoted(query)){ const phrase=query.slice(1,-1).toLowerCase(); return records.filter(r=>(r.text||'').toLowerCase().includes(phrase)); }
@@ -89,13 +70,10 @@
     const before=escapeHtml(text.slice(start,idx)), match=escapeHtml(text.slice(idx,idx+qn.length)), after=escapeHtml(text.slice(idx+qn.length,end));
     return (start>0?'…':'')+before+'<mark>'+match+'</mark>'+after+(end<text.length?'…':'');
   }
-  function toPdfUrl(url,q){ try{ if(!/\\.pdf(?:$|[?#])/.test(url)) return url; const u=new URL(url,location.href); const frag=u.hash?u.hash.replace(/^#/,'')+'&':''; u.hash='#'+frag+'search='+encodeURIComponent(q.replace(/^"|"$/g,'')); return u.toString(); }catch(e){ return url+(url.includes('#')?'&':'#')+'search='+encodeURIComponent(q.replace(/^"|"$/g,'')); } }
+  function toPdfUrl(url,q){ try{ if(!/\.pdf(?:$|[?#])/.test(url)) return url; const u=new URL(url,location.href); const frag=u.hash?u.hash.replace(/^#/, '')+'&':''; u.hash='#'+frag+'search='+encodeURIComponent(q.replace(/^"|"$/g,'')); return u.toString(); }catch(e){ return url+(url.includes('#')?'&':'#')+'search='+encodeURIComponent(q.replace(/^"|"$/g,'')); } }
   function renderHits(records,q){
     if(!hitsEl) return;
-    if(!records.length){
-      const why = indexLoaded && !INDEX.length ? ` <em>(No full‑text index available. See the blue status line above for filenames.)</em>` : '';
-      hitsEl.innerHTML=`<p class="error">No matches.${why}</p>`; setHeader('No matches'); return;
-    }
+    if(!records.length){ hitsEl.innerHTML=`<p class="error">No matches. ${indexLoaded && !INDEX.length ? '(Index missing or empty at data/search_index.json)' : ''}</p>`; setHeader('No matches'); return; }
     const hits=records.slice(0,HITS_LIMIT); const parts=[];
     for(const r of hits){
       const url=toPdfUrl(r.url,q), title=escapeHtml(r.title||'(untitled)'), symbol=escapeHtml(r.symbol||'');
@@ -106,13 +84,13 @@
   }
   function runSearch(autoSwitch=true){
     const q=(qEl&&qEl.value||'').trim(); if(!q){ clearHits(); if(autoSwitch) switchView('docs'); return; }
-    fetchIndex().then(records=>{ const filtered=filterRecords(records,q); renderHits(filtered,q); if(autoSwitch && filtered.length){ switchView('hits'); } });
+    loadIndex().then(records=>{ const filtered=filterRecords(records,q); renderHits(filtered,q); if(autoSwitch && filtered.length){ switchView('hits'); } });
   }
 
   if(qEl){ qEl.addEventListener('input', ()=>runSearch(true)); }
   if(radios){ radios.forEach(r=>r.addEventListener('change', e=>{ if(e.target.value==='hits'){ runSearch(false); } })); }
   if(resetBtn){ resetBtn.addEventListener('click', ()=>{ clearHits(); if(qEl){ qEl.value=''; } if(fulltextToggle) fulltextToggle.checked=false; switchView('docs'); }); }
 
-  // Expose for quick debugging in console
-  window.PACM_fulltext = { runSearch, fetchIndex };
+  // Expose for console debugging
+  window.PACM_fulltext = { runSearch, loadIndex };
 })();\
