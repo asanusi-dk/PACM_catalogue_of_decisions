@@ -1,0 +1,77 @@
+\
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PACM Full‑text Probe</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Ubuntu,sans-serif;padding:20px}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #e5e7eb;padding:8px;text-align:left}
+    th{background:#f3f4f6}
+    .ok{color:#065f46}
+    .bad{color:#b00020}
+    code{background:#f3f4f6;padding:2px 4px;border-radius:4px}
+  </style>
+</head>
+<body>
+  <h1>PACM Full‑text Index Probe</h1>
+  <p>This page checks common index filenames and shows whether they load and how many records they contain.</p>
+  <table>
+    <thead><tr><th>Path</th><th>Status</th><th>Records</th><th>Note</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <script>
+  (function(){
+    const SOURCES = [
+      'search_index.json','./search_index.json','data/search_index.json',
+      'data/fulltext.json','data/index.json','data/a64_fulltext.json','data/fulltext_index.json',
+      'fulltext.json','index.json','data/a64_fulltext.jsonl','fulltext.jsonl'
+    ];
+    const rows = document.getElementById('rows');
+    function addRow(path, ok, count, note){
+      const tr=document.createElement('tr');
+      tr.innerHTML = '<td><code>'+path+'</code></td>' +
+                     '<td class="'+(ok?'ok':'bad')+'">'+(ok?'Loaded':'Missing/Invalid')+'</td>' +
+                     '<td>'+(ok?count:'—')+'</td>' +
+                     '<td>'+(note||'')+'</td>';
+      rows.appendChild(tr);
+    }
+    function normalizeRecord(r){
+      const url = r.url || r.link || r.u || r.href || r.location || '';
+      const text = r.text || r.content || r.body || r.c || r.txt || r.doc_text || r.text_content || '';
+      return (url && text);
+    }
+    function trySrc(i){
+      if(i>=SOURCES.length) return;
+      const src=SOURCES[i];
+      fetch(src,{cache:'no-cache'}).then(r=>{
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        return r.text();
+      }).then(txt=>{
+        let arr=null, note='';
+        try{
+          if(src.endsWith('.jsonl')){
+            const lines = txt.split('\\n').map(s=>s.trim()).filter(Boolean);
+            arr = lines.map(l=>JSON.parse(l));
+            note='JSONL';
+          }else{
+            const json = JSON.parse(txt);
+            arr = Array.isArray(json) ? json : (json.records || json.docs || json.items || []);
+          }
+        }catch(e){
+          addRow(src, false, 0, 'Parse error');
+          trySrc(i+1);
+          return;
+        }
+        const valid = Array.isArray(arr) ? arr.filter(normalizeRecord) : [];
+        addRow(src, valid.length>0, valid.length, note);
+        trySrc(i+1);
+      }).catch(_=>{ addRow(src,false,0,''); trySrc(i+1); });
+    }
+    trySrc(0);
+  })();
+  </script>
+</body>
+</html>
