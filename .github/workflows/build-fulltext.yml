@@ -1,0 +1,32 @@
+name: Build Full-text Index
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'data/a64_catalogue.json'
+      - 'scripts/build_fulltext.py'
+      - '.github/workflows/build-fulltext.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pdftotext (poppler-utils)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+
+      - name: Build full-text index
+        run: |
+          python3 scripts/build_fulltext.py
+
+      - name: Commit index
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: "data/search_index.json"
+          message: "chore: update full-text index"
+          default_author: github_actions
