@@ -1,17 +1,18 @@
-/* UN Dark Blue Theme — apply AFTER your base CSS */
-/* Palette */
+/* UN Dark Blue Theme (merged with tweaks) */
+/* Load AFTER base CSS (assets/style.css) */
+
 :root{
-  --bg: #0b233f;           /* deep UN/navy background */
-  --bg-elev: #0f2e54;      /* elevated surfaces */
-  --panel: #133966;        /* panels/cards */
-  --line: #1e4a80;         /* separators */
-  --ink: #e8f1ff;          /* main text */
-  --muted: #b8c7e3;        /* secondary text */
-  --link: #7fb6ff;         /* links */
-  --link-hover: #a8cbff;   /* link hover */
-  --accent: #0a6ed1;       /* UN blue accents */
-  --accent-2: #2a7ae6;     /* lighter accent */
-  --mark: #ffee93;         /* highlight */
+  --bg: #0b233f;
+  --bg-elev: #0f2e54;
+  --panel: #133966;
+  --line: #1e4a80;
+  --ink: #e8f1ff;
+  --muted: #b8c7e3;
+  --link: #7fb6ff;
+  --link-hover: #a8cbff;
+  --accent: #0a6ed1;
+  --accent-2: #2a7ae6;
+  --mark: #ffee93;
   --badge-bg: #174a88;
   --badge-border: #2a66b5;
   --radius: 10px;
@@ -29,19 +30,28 @@ a:hover { color: var(--link-hover); text-decoration: underline; }
   border-bottom: 1px solid var(--line);
   box-shadow: var(--shadow);
 }
-.brand-text h1 { color: #eaf2ff; }
+.brand-text h1 {
+  /* merged tweak: match subtitle vibe */
+  font-weight: 600;
+  color: #eaf2ff;
+  letter-spacing: .2px;
+  margin: 0 0 4px 0;
+  text-shadow: none;
+}
 .brand-text .tagline { color: var(--muted); }
 
 /* Controls */
-.controls {
-  background: transparent;
-}
+.controls { background: transparent; padding-left: 20px; } /* align with title */
 .controls input[type="search"] {
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: inset 0 1px 2px rgba(0,0,0,.25);
+  height: 48px;                 /* merged tweak: larger */
+  font-size: 16px;
+  padding: 10px 14px;
+  box-sizing: border-box;
 }
 .controls input[type="search"]::placeholder { color: #a8b9d8; }
 .controls input[type="search"]:focus {
@@ -55,10 +65,18 @@ a:hover { color: var(--link-hover); text-decoration: underline; }
   color: var(--ink);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  /* merged tweak: align radio + label */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
 }
-.view-toggle .tab:hover {
-  border-color: var(--accent-2);
-  background: #15457c;
+.view-toggle .tab input{
+  margin: 0;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  accent-color: #7fb6ff;
 }
 button, .ghost {
   border: 1px solid var(--line);
@@ -67,40 +85,23 @@ button, .ghost {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
-button:hover, .ghost:hover {
-  border-color: var(--accent-2);
-  background: #15457c;
-}
-button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
+button:hover, .ghost:hover { border-color: var(--accent-2); background: #15457c; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.primary:hover { background: var(--accent-2); }
 
-.status {
-  color: var(--muted);
-}
+.status { color: var(--muted); }
+/* merged tweak: hide fulltext status lines */
+#status, #fulltext-status { display: none !important; }
 
 /* Table */
-.doc-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--bg);
-}
+.doc-table { width: 100%; border-collapse: collapse; background: var(--bg); }
 .doc-table thead th {
   color: #d9e7ff;
   background: #0e2b50;
   border-bottom: 2px solid var(--line);
 }
-.doc-table tbody td {
-  border-bottom: 1px solid var(--line);
-  color: var(--ink);
-  background: transparent;
-}
-.doc-table tbody tr:hover td {
-  background: rgba(33, 86, 153, .25);
-}
+.doc-table tbody td { border-bottom: 1px solid var(--line); color: var(--ink); background: transparent; }
+.doc-table tbody tr:hover td { background: rgba(33, 86, 153, .25); }
 
 /* Grouping rows */
 .group-row td{
@@ -118,9 +119,7 @@ button.primary:hover { background: var(--accent-2); }
 }
 
 /* Symbol monospace */
-.cell-symbol{
-  color: #cde0ff;
-}
+.cell-symbol{ color: #cde0ff; }
 
 /* Matches list */
 .hitlist .hit {
@@ -130,8 +129,7 @@ button.primary:hover { background: var(--accent-2); }
   box-shadow: var(--shadow);
 }
 .hitlist .hit-h a { color: #eaf2ff; }
-.hitlist .hit .sym { color: #a8b9d8; }
-.hitlist .hit .sec { color: #a8b9d8; }
+.hitlist .hit .sym, .hitlist .hit .sec { color: #a8b9d8; }
 .hitlist .hit-s { color: var(--ink); }
 .hitlist .hit-s mark {
   background: var(--mark);
@@ -148,14 +146,11 @@ button.primary:hover { background: var(--accent-2); }
 }
 
 /* Footer */
-footer{
-  color: var(--muted);
-  border-top: 1px solid var(--line);
-}
+footer{ color: var(--muted); border-top: 1px solid var(--line); }
 
 /* Focus */
 :where(a, button, input, .tab) :focus,
-:where(a, button, input, .tab):focus {
+:where(a, button, input, .tab):focus{
   outline: 3px solid rgba(127,182,255,.5);
   outline-offset: 2px;
   border-radius: 6px;
