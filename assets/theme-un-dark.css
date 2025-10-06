@@ -164,3 +164,18 @@ footer{ color: var(--muted); border-top: 1px solid var(--line); }
 
 /* Title color = subtitle color */
 .brand-text h1 { color: var(--muted) !important; }
+
+/* Extra breathing room between search results (Matches view) */
+.hitlist { 
+  display: grid;           /* safe, one-column */
+  grid-template-columns: 1fr;
+  row-gap: 16px;           /* <-- space between result cards */
+  margin-top: 8px;
+}
+
+.hitlist .hit {
+  padding: 14px 16px;      /* a bit more internal padding for readability */
+  border-radius: var(--radius);
+}
+
+
