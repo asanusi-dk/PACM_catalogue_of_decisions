@@ -33,7 +33,7 @@ a:hover { color: var(--link-hover); text-decoration: underline; }
 .brand-text h1 {
   /* merged tweak: match subtitle vibe */
   font-weight: 600;
-  color: #eaf2ff;
+  color: var(--muted);   /* #b8c7e3 — same as subtitle */
   letter-spacing: .2px;
   margin: 0 0 4px 0;
   text-shadow: none;
