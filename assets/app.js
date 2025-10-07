@@ -1,128 +1,209 @@
-\
-/* assets/app.js — grouped table (Section → Subsection), dynamic headers, symbol de-dupe */
+// PACM app.js — plug-and-play replacement with multi-hit full‑text search
 (function(){
-  const CATALOG_URL = 'data/a64_catalogue.json';
-  // Edit these labels to match your spreadsheet exactly:
-  const HEADERS = ['Document', 'Symbol', 'Version', 'Entry into force / Date'];
+  'use strict';
+  const Q_URL = 'data/a64_catalogue.json?v=ft2';
+  const Q_IDX = 'data/search_index.json?v=ft2';
 
-  const statusEl = document.getElementById('doc-status');
-  const table = document.getElementById('doc-table');
-  const thead = table && table.querySelector('thead');
-  const tbody = (table && table.querySelector('tbody#doc-tbody')) || document.getElementById('doc-tbody');
-  const searchBox = document.getElementById('q');
+  const qEl = document.getElementById('q');
+  const fulltextEl = document.getElementById('fulltextToggle');
+  const hitsEl = document.getElementById('hits');
+  const hitsHeaderEl = document.getElementById('hitsHeader');
+  const tbodyEl = document.getElementById('doc-tbody');
 
-  function setStatus(msg){
-    if(!statusEl) return;
-    if(!msg){ statusEl.textContent=''; statusEl.style.display='none'; }
-    else { statusEl.textContent = msg; statusEl.style.display=''; }
+  (function injectCSS(){
+    const css = `.hitlist{display:grid;grid-template-columns:1fr;row-gap:16px;margin-top:8px}` +
+                `.hitlist .hit{padding:14px 16px;border-radius:10px}`;
+    const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s);
+  })();
+
+  const state = { CATALOG: [], INDEX: [], ready: false };
+
+  function escapeHtml(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m])); }
+  function toPdfUrl(url, qraw){
+    try{ const hash = qraw ? '#search=' + encodeURIComponent(qraw.replace(/"/g,'')) : ''; return url + hash; }
+    catch(e){ return url; }
   }
-  function esc(s){ return (s||'').replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+  function norm(s){ return (s||'').toString().toLowerCase(); }
 
-  function normalizeSymbol(sym){
-    if(!sym) return '';
-    let s = String(sym).trim();
-    const mCMA = s.match(/(\d+\/CMA\.\d)/i);
-    const mA64 = s.match(/(A6\.4-[A-Z]+(?:-[A-Z]+)*-\d{3})/i);
-    const mUN  = s.match(/(FCCC\/PA\/CMA\/\d{4}\/[\w./-]+)/i);
-    if(mCMA) return mCMA[1];
-    if(mA64) return mA64[1];
-    if(mUN)  return mUN[1];
-    return s;
-  }
-
-  function dedupeBySymbol(rows){
-    const seen = new Map();
-    const out = [];
-    const score = (x)=>['date','version','type','section','subsection'].reduce((n,k)=>n+(x[k] && String(x[k]).trim() ? 1:0),0);
+  function groupCatalogue(rows){
+    const m = new Map();
     for(const r of rows){
-      const key = normalizeSymbol(r.symbol) || (r.url||'').replace(/#.*$/,''); // fallback to URL sans hash
-      if(!key){ out.push(r); continue; }
-      if(seen.has(key)){
-        const prev = seen.get(key);
-        if(score(r) > score(prev)){
-          const idx = out.indexOf(prev);
-          if(idx>=0) out[idx] = r;
-          seen.set(key, r);
-        }
-      } else {
-        seen.set(key, r);
-        out.push(r);
+      const sec = (r.section||'Other').trim();
+      const sub = (r.subsection||'').trim();
+      if(!m.has(sec)) m.set(sec, new Map());
+      const inner = m.get(sec);
+      if(!inner.has(sub)) inner.set(sub, []);
+      inner.get(sub).push(r);
+    }
+    return m;
+  }
+
+  const MAX_PER_DOC = 200, MAX_TOTAL = 2000, SNIPPET_CHARS = 110;
+  const softClean = s => (s||"").replace(/\u00AD/g,"").replace(/-\s*\n\s*/g,"").replace(/\s*\n\s*/g," ").replace(/\s+/g," ");
+  function smartPhraseQuery(raw){
+    const q = raw.trim(); const quoted = q.startsWith('"') && q.endsWith('"') && q.length>1;
+    const core = quoted ? q.slice(1,-1) : q; const hasSpace = /\s/.test(core);
+    return { core, phrase: quoted || hasSpace };
+  }
+  function buildRegexList(qraw){
+    const { core, phrase } = smartPhraseQuery(qraw);
+    if(!core.trim()) return [];
+    if(phrase){ const pat = core.trim().replace(/\s+/g,'\\s+'); return [new RegExp(pat,'gi')]; }
+    return core.split(/\s+/).filter(Boolean).map(t => new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'));
+  }
+  function findAllRanges(text, regex){
+    const ranges=[]; let m;
+    while((m = regex.exec(text)) && ranges.length<MAX_TOTAL){
+      const start = m.index, end = start + (m[0]||'').length;
+      if(end>start) ranges.push({start,end});
+      if(regex.lastIndex===start) regex.lastIndex++;
+    }
+    return ranges;
+  }
+  function dedupeRanges(ranges, minGap=20){
+    if(!ranges.length) return [];
+    ranges.sort((a,b)=>a.start-b.start);
+    const out=[ranges[0]];
+    for(let i=1;i<ranges.length;i++){
+      const prev = out[out.length-1], cur = ranges[i];
+      if(cur.start <= prev.end + minGap){ prev.end = Math.max(prev.end, cur.end); }
+      else out.push(cur);
+    }
+    return out;
+  }
+  function sliceWithMark(text, range, qraw){
+    const start = Math.max(0, range.start - SNIPPET_CHARS);
+    const end   = Math.min(text.length, range.end + SNIPPET_CHARS);
+    let snip = text.slice(start, end);
+    const { core, phrase } = smartPhraseQuery(qraw);
+    const re = phrase
+      ? new RegExp(core.trim().replace(/\s+/g,'\\s+'),'gi')
+      : new RegExp(core.split(/\s+/).filter(Boolean).map(t=>t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'gi');
+    snip = escapeHtml(snip).replace(re, m=>`<mark>${escapeHtml(m)}</mark>`);
+    if(start>0) snip = '… ' + snip;
+    if(end<text.length) snip = snip + ' …';
+    return snip;
+  }
+  function parseTerms(q){ const out=[]; const re=/"([^"]+)"|(\S+)/g; let a; while((a=re.exec(q))) out.push((a[1]||a[2]).toLowerCase()); return out; }
+  function recordHaystackMeta(rec){ return norm([rec.title,rec.symbol,rec.section,rec.subsection,rec.notes].filter(Boolean).join(' • ')); }
+  function recordHaystackFull(rec){ return norm(rec.text||''); }
+  function includesAll(hay, terms){ for(const t of terms) if(!hay.includes(t)) return false; return true; }
+
+  function searchDocs(catalog, q, useFull){
+    const terms = parseTerms(q);
+    if(!terms.length) return catalog.slice();
+    if(!useFull){ return catalog.filter(r => includesAll(recordHaystackMeta(r), terms)); }
+    const set = new Set();
+    for(const rec of state.INDEX){ const hay = recordHaystackFull(rec); if(hay && includesAll(hay, terms)) set.add(rec.url); }
+    return catalog.filter(r => set.has(r.url) || includesAll(recordHaystackMeta(r), terms));
+  }
+
+  function searchHits(index, qraw, useFull){
+    const raw = (qraw||'').trim(); if(!raw) return [];
+    const out=[]; let total=0;
+    for(const rec of index){
+      const base = useFull ? recordHaystackFull(rec) : recordHaystackMeta(rec);
+      if(!base) continue;
+      const text = softClean(base);
+      let ranges=[];
+      const searchers = buildRegexList(raw);
+      if(!searchers.length) continue;
+      if(searchers.length===1){ ranges = findAllRanges(text, new RegExp(searchers[0], searchers[0].flags)); }
+      else { for(const re of searchers){ const sub = findAllRanges(text, new RegExp(re, re.flags)); ranges = ranges.concat(sub); } }
+      if(!ranges.length) continue;
+      ranges = dedupeRanges(ranges).slice(0, MAX_PER_DOC);
+      for(const r of ranges){
+        out.push({ url: toPdfUrl(rec.url, raw), title: rec.title||'(untitled)', symbol: rec.symbol||'', section: rec.section||'', subsection: rec.subsection||'', snippet: sliceWithMark(text, r, raw) });
+        total++; if(total>=MAX_TOTAL) break;
       }
+      if(total>=MAX_TOTAL) break;
     }
     return out;
   }
 
-  function groupData(rows){
-    const bySection = new Map();
-    for(const r of rows){
-      const sec = r.section || 'Other';
-      const sub = r.subsection || '';
-      if(!bySection.has(sec)) bySection.set(sec, new Map());
-      const inner = bySection.get(sec);
-      if(!inner.has(sub)) inner.set(sub, []);
-      inner.get(sub).push(r);
+  function renderDocs(rows){
+    const grouped = groupCatalogue(rows);
+    const parts=[];
+    const sections = Array.from(grouped.keys()).sort((a,b)=>a.localeCompare(b));
+    for(const sec of sections){
+      parts.push(`<tr class="group-row"><td colspan="4">${escapeHtml(sec)}</td></tr>`);
+      const sub = grouped.get(sec);
+      const subs = Array.from(sub.keys()).sort((a,b)=>(a||'').localeCompare(b||''));
+      for(const ss of subs){
+        if(ss) parts.push(`<tr class="subgroup-row"><td colspan="4">${escapeHtml(ss)}</td></tr>`);
+        const items = sub.get(ss).slice().sort((a,b)=>(a.title||'').localeCompare(b.title||''));
+        for(const r of items){
+          const title = escapeHtml(r.title||'(untitled)');
+          const url = escapeHtml(r.url||'#');
+          const sym = escapeHtml(r.symbol||'');
+          const ver = escapeHtml(r.version||'');
+          const date = escapeHtml(r.date||'');
+          parts.push(`<tr class="doc-row">
+            <td class="cell-title"><a href="${url}" target="_blank" rel="noopener">${title}</a></td>
+            <td class="cell-symbol">${sym}</td>
+            <td class="cell-version">${ver}</td>
+            <td class="cell-date">${date}</td>
+          </tr>`);
+        }
+      }
     }
-    return bySection;
+    tbodyEl.innerHTML = parts.join('\n');
   }
 
-  function ensureHeaders(){
-    if(!thead || !table) return;
-    thead.innerHTML = `<tr>${HEADERS.map(h => `<th>${esc(h)}</th>`).join('')}</tr>`;
+  function setHeader(text){ if(hitsHeaderEl) hitsHeaderEl.textContent = text||''; }
+
+  function renderHits(results, qraw, useFull){
+    if(!results.length){
+      hitsEl.innerHTML = `<p class="error">No matches${useFull?' in document text':''}.</p>`;
+      setHeader('No matches');
+      hitsEl.classList.remove('hidden'); hitsHeaderEl.classList.remove('hidden'); return;
+    }
+    hitsEl.innerHTML = results.map(r => `
+      <article class="hit">
+        <header class="hit-h">
+          <a href="${r.url}" target="_blank" rel="noopener">${escapeHtml(r.title)}</a>
+          ${r.symbol ? ` <span class="sym">(${escapeHtml(r.symbol)})</span>` : ''}
+          ${r.section ? ` <span class="sec">— ${escapeHtml(r.section)}${r.subsection ? ' — ' + escapeHtml(r.subsection) : ''}</span>` : ''}
+        </header>
+        <p class="hit-s">${r.snippet}</p>
+      </article>`).join('\n');
+    setHeader(`${results.length} match${results.length===1?'':'es'}${useFull?' · Full-text':''}`);
+    hitsEl.classList.remove('hidden'); hitsHeaderEl.classList.remove('hidden');
   }
 
-  function render(){
-    if(!tbody){ setStatus('Table body is missing (#doc-tbody).'); return; }
-    setStatus('Loading…');
-    fetch(CATALOG_URL, { cache: 'no-cache' })
-      .then(r => { if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
-      .then(data => {
-        let rows = data.map(d => ({
-          title: d.title, url: d.url, symbol: d.symbol,
-          version: d.version || '', date: d.date || '',
-          type: d.type || '', section: d.section || '', subsection: d.subsection || ''
-        }));
-        rows = dedupeBySymbol(rows);
+  function currentView(){ const r = document.querySelector('input[name="view"]:checked'); return r ? r.value : 'docs'; }
 
-        const q = (searchBox && searchBox.value || '').trim().toLowerCase();
-        if(q){
-          rows = rows.filter(r => (r.title||'').toLowerCase().includes(q) || (r.symbol||'').toLowerCase().includes(q));
-        }
+  function runSearch(){
+    if(!state.ready) return;
+    const qraw = qEl ? qEl.value : '';
+    const useFull = !!(fulltextEl && fulltextEl.checked);
+    const view = currentView();
+    const docTable = document.getElementById('doc-table');
 
-        rows.sort((a,b)=> (a.section||'').localeCompare(b.section||'') ||
-                          (a.subsection||'').localeCompare(b.subsection||'') ||
-                          (a.title||'').localeCompare(b.title||''));
-
-        const grouped = groupData(rows);
-        ensureHeaders();
-
-        const parts = [];
-        const colCount = HEADERS.length;
-
-        for(const [sec, subMap] of grouped){
-          parts.push(`<tr class="group-row"><td colspan="${colCount}">${esc(sec)}</td></tr>`);
-          for(const [sub, items] of subMap){
-            if(sub){ parts.push(`<tr class="subgroup-row"><td colspan="${colCount}">${esc(sub)}</td></tr>`); }
-            for(const r of items){
-              parts.push(`<tr class="doc-row">
-                <td class="cell-title"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></td>
-                <td class="cell-symbol">${esc(normalizeSymbol(r.symbol))}</td>
-                <td class="cell-version">${esc(r.version || '')}</td>
-                <td class="cell-date">${esc(r.date || '')}</td>
-              </tr>`);
-            }
-          }
-        }
-        tbody.innerHTML = parts.join('\\n');
-        setStatus('');
-      })
-      .catch(err => {
-        console.error('[PACM] render failed:', err);
-        setStatus('Failed to load catalogue.');
-        if(tbody) tbody.innerHTML = `<tr><td colspan="${HEADERS.length}" class="error">Could not fetch data/a64_catalogue.json</td></tr>`;
-      });
+    if(view === 'hits'){
+      const results = searchHits(state.INDEX, qraw, useFull);
+      renderHits(results, qraw, useFull);
+      if(docTable) docTable.style.display = 'none';
+    }else{
+      const docs = searchDocs(state.CATALOG, qraw, useFull);
+      renderDocs(docs);
+      hitsEl.classList.add('hidden'); hitsHeaderEl.classList.add('hidden');
+      if(docTable) docTable.style.display = '';
+    }
   }
 
-  if(searchBox){ searchBox.addEventListener('input', render); }
-  document.addEventListener('DOMContentLoaded', render);
-  window.PACM_renderTable = render;
+  async function init(){
+    try{
+      const [c, i] = await Promise.all([ fetch(Q_URL).then(r=>r.json()), fetch(Q_IDX).then(r=>r.json()).catch(_=>[]) ]);
+      state.CATALOG = Array.isArray(c)?c:[]; state.INDEX = Array.isArray(i)?i:[]; state.ready = true;
+      renderDocs(state.CATALOG);
+      if(qEl) qEl.addEventListener('input', runSearch);
+      if(fulltextEl) fulltextEl.addEventListener('change', runSearch);
+      document.querySelectorAll('input[name="view"]').forEach(r => r.addEventListener('change', runSearch));
+    }catch(e){
+      console.error('Init error', e);
+      if(tbodyEl) tbodyEl.innerHTML = '<tr><td colspan="4">Could not load data.</td></tr>';
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
