@@ -1,0 +1,26 @@
+name: Merge Meeting Reports
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'data/meetings.json'
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Merge meeting reports into catalogue
+        run: python3 scripts/merge_meetings.py
+      - name: Commit catalogue
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: "data/a64_catalogue.json"
+          message: "chore: merge meeting reports into catalogue"
+          default_author: github_actions
