@@ -1,6 +1,5 @@
 # scripts/merge_meetings.py
-import json, pathlib, re
-
+import json, pathlib
 DATA = pathlib.Path("data")
 CAT  = DATA / "a64_catalogue.json"
 MEET = DATA / "meetings.json"
@@ -13,69 +12,44 @@ def save_json(path, data):
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def normalize_symbol(s):
-    if not s: return s
-    s = s.strip().replace("–","-").replace("—","-")
-    s = s.upper()
-    return s
-
-def derive_subsection(symbol):
-    if symbol and "SBM" in symbol.upper():
-        return "SBM"
-    return "SB"
-
-def default_title(symbol, existing_title=""):
-    if existing_title: return existing_title
-    return f"{symbol} — Meeting report"
-
-def to_pdf_url(u):
-    if isinstance(u, str) and u.lower().endswith(".pdf"):
-        return u
-    return u
+    return s.strip().replace("–","-").replace("—","-").upper() if s else s
 
 def key_order(d):
-    order = ["title","url","symbol","version","date","section","subsection","notes"]
+    order = ["title","url","symbol","version","date","section","notes"]
     return {**{k:d[k] for k in order if k in d}, **{k:v for k,v in d.items() if k not in order}}
 
 def merge_records(catalog, meetings):
-    by_url   = {d.get("url"): d for d in catalog if d.get("url")}
-    by_sig   = {(d.get("symbol"), d.get("title")): d for d in catalog if d.get("symbol") and d.get("title")}
-    by_title = {d.get("title"): d for d in catalog if d.get("title")}
-
-    def find_old(n):
-        if n.get("url") and n["url"] in by_url: return by_url[n["url"]]
-        key = (n.get("symbol"), n.get("title"))
-        if key in by_sig: return by_sig[key]
-        return by_title.get(n.get("title"))
-
-    clean_meet = []
+    by_url = {d.get("url"): d for d in catalog if d.get("url")}
+    by_sig = {d.get("symbol"): d for d in catalog if d.get("symbol")}
+    clean = []
     for m in meetings:
         m = dict(m)
-        m["url"] = to_pdf_url(m.get("url",""))
         m["symbol"] = normalize_symbol(m.get("symbol",""))
-        m["title"] = default_title(m.get("symbol",""), m.get("title"))
         m["section"] = "Meeting reports of the Supervisory Body"
-        m["subsection"] = m.get("subsection") or derive_subsection(m.get("symbol",""))
-        clean_meet.append(m)
+        m.pop("subsection", None)
+        clean.append(m)
 
     next_cat = []
-    used_urls = set()
-    for d in catalog:
-        rep = next((m for m in clean_meet if m.get("url")==d.get("url")), None)
+    seen = set()
+    for row in catalog:
+        rep = None
+        if row.get("url") in by_url:
+            rep = next((m for m in clean if m.get("url")==row.get("url")), None)
+        elif row.get("symbol") in by_sig:
+            rep = next((m for m in clean if m.get("symbol")==row.get("symbol")), None)
         if rep:
-            used_urls.add(rep["url"])
-            if d.get("notes") and not rep.get("notes"):
-                rep["notes"] = d["notes"]
-            next_cat.append(key_order({**d, **rep}))
+            seen.add(rep.get("url"))
+            if row.get("notes") and not rep.get("notes"):
+                rep["notes"] = row["notes"]
+            merged = {**row, **rep}
+            merged.pop("subsection", None)
+            next_cat.append(key_order(merged))
         else:
-            next_cat.append(d)
+            next_cat.append(row)
 
-    for m in clean_meet:
-        if m.get("url") not in used_urls:
-            old = find_old(m)
-            if old and old.get("notes") and not m.get("notes"):
-                m["notes"] = old["notes"]
+    for m in clean:
+        if m.get("url") not in seen and m.get("symbol") not in by_sig:
             next_cat.append(key_order(m))
-
     return next_cat
 
 def main():
