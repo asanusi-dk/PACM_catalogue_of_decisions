@@ -1,0 +1,16 @@
+name: Cleanup Meeting Subsections
+on: { workflow_dispatch: {} }
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.x' }
+      - name: Remove subsections from meeting reports
+        run: python3 scripts/cleanup_meeting_subsections.py
+      - uses: EndBug/add-and-commit@v9
+        with:
+          add: "data/a64_catalogue.json"
+          message: "chore: remove subsections from Meeting reports"
+          default_author: github_actions
